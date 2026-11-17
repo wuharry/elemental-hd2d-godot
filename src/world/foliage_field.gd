@@ -98,6 +98,8 @@ static func _multimesh(mesh: Mesh, atlas: String, cols: float, xfs: Array[Transf
 	mmi.multimesh = mm
 	mmi.material_override = mat
 	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if wind > 0.0:
+		AmbientLife.tag(mmi, "wind")
 	return mmi
 
 

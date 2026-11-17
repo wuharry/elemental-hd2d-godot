@@ -225,6 +225,8 @@ static func crystals(crystal_seed: int, color: Color, s: float = 1.0) -> Node3D:
 	var light := OmniLight3D.new()
 	light.position = Vector3(0, 0.9 * s, 0)
 	light.light_color = color
+	# 自然／魔法光可以是冷色，但必須登記在 magic_lights，風格測試才會放行（BLUEPRINT A8）
+	light.add_to_group("magic_lights")
 	light.light_energy = 1.6
 	light.omni_range = 5.5 * s
 	light.omni_attenuation = 1.5

@@ -149,18 +149,25 @@ static func _base_presets() -> Dictionary:
 	return presets
 
 
-## 換場景時依 id 查同一份 PRESETS；只接受四時段基底已有的欄位。
-func apply_scene(def: SceneDef) -> void:
-	_presets = _base_presets()
-	var overrides: Dictionary = PRESETS["scene_overrides"].get(def.id, {})
+## 某個場景四個時段實際生效的數值 = 基底 + PRESETS.scene_overrides[scene_id]（先 "*" 再個別時段）。
+## 只接受四時段基底已有的欄位；風格測試也用這個函式檢查每個場景的數值範圍。
+static func resolve(scene_id: String) -> Dictionary:
+	var presets := _base_presets()
+	var overrides: Dictionary = PRESETS["scene_overrides"].get(scene_id, {})
 	for time_name in ORDER:
 		for scope in ["*", time_name]:
 			var extra: Dictionary = overrides.get(scope, {})
 			for key in extra:
-				if _presets[time_name].has(key):
-					_presets[time_name][key] = extra[key]
+				if presets[time_name].has(key):
+					presets[time_name][key] = extra[key]
 				else:
 					push_error("scene_overrides 用了 PRESETS 沒有的欄位：%s" % key)
+	return presets
+
+
+## 換場景時依 id 查同一份 PRESETS。
+func apply_scene(def: SceneDef) -> void:
+	_presets = resolve(def.id)
 	set_time(current, true)
 
 

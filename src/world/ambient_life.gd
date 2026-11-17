@@ -3,6 +3,18 @@ extends RefCounted
 ## 讓場景活起來的東西（BLUEPRINT A10）：塵埃光點、落葉、螢火蟲、煙、火焰、蝴蝶、鳥、雲影。
 
 
+## 每種會動的東西都要帶種類標記：tests/style_test.gd 依此檢查每個場景至少有四種（BLUEPRINT A10）。
+## 新增一種就在這裡加一個工廠函式，回傳前呼叫 tag()。
+const KINDS := ["dust", "leaves", "fireflies", "smoke", "fire", "butterflies", "birds", "snowfall", "splash", "drips", "clouds", "wind"]
+
+
+static func tag(node: Node3D, kind: String) -> Node3D:
+	assert(KINDS.has(kind), "unknown ambient kind: " + kind)
+	node.set_meta("ambient_kind", kind)
+	node.add_to_group("ambient")
+	return node
+
+
 static func _billboard(tex_name: String, cutout: bool, unshaded: bool) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_texture = Mats.tex(tex_name)
@@ -75,7 +87,7 @@ static func dust() -> GPUParticles3D:
 	p.draw_pass_1 = _quad_mesh(0.06, mat)
 	p.position = Vector3(0, 3.6, 0)
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return p
+	return tag(p, "dust")
 
 
 ## 樹下的落葉。
@@ -107,7 +119,7 @@ static func leaves(pos: Vector3, radius: float, tint: Color) -> GPUParticles3D:
 	p.process_material = pm
 	p.draw_pass_1 = _quad_mesh(0.25, _billboard("leaf", true, false))
 	p.position = pos
-	return p
+	return tag(p, "leaves")
 
 
 ## 夜晚的螢火蟲。加入 "night_only" 群組，由 TimeOfDay 開關。
@@ -136,7 +148,7 @@ static func fireflies() -> GPUParticles3D:
 	p.position = Vector3(0, 1.2, 4)
 	p.emitting = false
 	p.add_to_group("night_only")
-	return p
+	return tag(p, "fireflies")
 
 
 ## 煙囪的煙：一顆一顆的灰白方塊，往上飄並變大。
@@ -163,7 +175,7 @@ static func smoke(pos: Vector3) -> GPUParticles3D:
 	p.draw_pass_1 = mesh
 	p.position = pos
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return p
+	return tag(p, "smoke")
 
 
 ## 營火的火焰：發光小方塊往上竄。
@@ -196,7 +208,7 @@ static func fire(pos: Vector3) -> GPUParticles3D:
 	p.draw_pass_1 = mesh
 	p.position = pos
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return p
+	return tag(p, "fire")
 
 
 static func butterflies(homes: Array[Vector3]) -> Node3D:
@@ -208,7 +220,7 @@ static func butterflies(homes: Array[Vector3]) -> Node3D:
 		b.set_script(script)
 		root.add_child(b)
 		b.call("setup", homes[i], tints[i % tints.size()], i)
-	return root
+	return tag(root, "butterflies")
 
 
 static func birds(count: int, height: Vector2 = Vector2(6.5, 9.5), tint: Color = Color("#3a3440"), orbit: float = 1.0) -> Node3D:
@@ -219,7 +231,7 @@ static func birds(count: int, height: Vector2 = Vector2(6.5, 9.5), tint: Color =
 		b.set_script(script)
 		root.add_child(b)
 		b.call("setup", i, height, tint, orbit)
-	return root
+	return tag(root, "birds")
 
 
 ## 下雪：整個場景上空往下飄的白色小方塊，被風吹得斜斜的。
@@ -249,7 +261,7 @@ static func snowfall() -> GPUParticles3D:
 	p.draw_pass_1 = mesh
 	p.position = Vector3(0, 11.0, 0)
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return p
+	return tag(p, "snowfall")
 
 
 ## 瀑布底下濺起的水花：白色小方塊往外噴再落下。
@@ -277,7 +289,7 @@ static func splash(pos: Vector3, width: float) -> GPUParticles3D:
 	p.draw_pass_1 = mesh
 	p.position = pos
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return p
+	return tag(p, "splash")
 
 
 ## 洞頂滴下來的水滴。
@@ -302,7 +314,7 @@ static func drips(center: Vector3, extents: Vector3) -> GPUParticles3D:
 	p.draw_pass_1 = mesh
 	p.position = center
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	return p
+	return tag(p, "drips")
 
 
 ## 雲影：高空的大方塊，只投影子不顯示，慢慢飄過整個村莊。
@@ -320,4 +332,4 @@ static func clouds() -> Node3D:
 			var mi := Build.box(c, size, Vector3(rng.randf_range(-6, 6), 0, rng.randf_range(-4, 4)), mat)
 			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
 		root.add_child(c)
-	return root
+	return tag(root, "clouds")
