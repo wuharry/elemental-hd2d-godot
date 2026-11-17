@@ -307,8 +307,13 @@ func _bark() -> void:
 
 ## 兩種草叢，各 16x16，並排成 32x16。
 func _grass_tuft() -> void:
+	_grass_tuft_named("grass_tuft", _hex(["#3a7a2c", "#4f9636", "#6cb444", "#93d05a"]))
+	# 雪地用的霜枯草：同樣的草形，換成枯黃到霜白
+	_grass_tuft_named("grass_tuft_frost", _hex(["#857756", "#a49672", "#cdc4a6", "#eef3f8"]))
+
+
+func _grass_tuft_named(name: String, tones: Array) -> void:
 	var img := _new(32, 16)
-	var tones := _hex(["#3a7a2c", "#4f9636", "#6cb444", "#93d05a"])
 	for variant in 2:
 		var blades: int = 7 if variant == 0 else 5
 		for b in blades:
@@ -324,7 +329,7 @@ func _grass_tuft() -> void:
 				img.set_pixel(variant * 16 + px, py, c)
 				if i < bh / 2 and px + 1 <= 15:
 					img.set_pixel(variant * 16 + px + 1, py, tones[0])
-	_save(img, "grass_tuft")
+	_save(img, name)
 
 
 ## 四種花，各 16x16，並排成 64x16。

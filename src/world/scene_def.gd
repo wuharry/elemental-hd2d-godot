@@ -40,6 +40,8 @@ var ground := {
 var grass_count := 42000
 var flower_count := 7000
 var grass_tints := [Color("#9cc67c"), Color("#dcf0b4"), Color("#f0e69a")]
+## 草叢圖集（assets/textures/ 裡 32x16、兩格的那種）。雪地用 grass_tuft_frost。
+var grass_atlas := "grass_tuft"
 ## 外圍背景：terraces（台地 + 針葉林）、walls（室內牆）、none。
 var backdrop := {"kind": "terraces", "cliff_tint": Color("#a8a294"), "top": "grass_ground", "tree_tint_a": Color("#9fc08a"), "tree_tint_b": Color("#6f9a72"), "snow": false}
 ## 核心區以外要不要鋪地（室內場景不鋪，外面就是一片黑）。

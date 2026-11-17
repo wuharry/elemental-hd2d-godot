@@ -34,7 +34,7 @@ static func build(def: SceneDef, extra_flower_spots: Array[Vector3]) -> Node3D:
 		c = c.lerp(tints[2], _patch(p, 0.05, 9.7) * 0.3)
 		grass_col.append(c * rng.randf_range(0.88, 1.06))
 		grass_var.append(float(rng.randi() % 2))
-	root.add_child(_multimesh(mesh, "grass_tuft", 2.0, grass_xf, grass_col, grass_var, 0.11))
+	root.add_child(_multimesh(mesh, def.grass_atlas, 2.0, grass_xf, grass_col, grass_var, 0.11))
 
 	# --- 花：成片出現，而不是平均撒 ---
 	var flower_xf: Array[Transform3D] = []
@@ -66,6 +66,11 @@ static func build(def: SceneDef, extra_flower_spots: Array[Vector3]) -> Node3D:
 
 
 ## 低頻雜訊 0..1，用來決定草色與花床位置（跟貼圖產生器無關，只在擺放時用）。
+## 場景檔要讓草成叢分布時用這個（同一個低頻雜訊，0..1）。
+static func patch(p: Vector2, freq: float, offset: float) -> float:
+	return _patch(p, freq, offset)
+
+
 static func _patch(p: Vector2, freq: float, offset: float) -> float:
 	var v := sin(p.x * freq * 6.0 + offset) * cos(p.y * freq * 5.0 - offset * 1.7)
 	v += sin((p.x + p.y) * freq * 3.3 + offset * 2.3) * 0.6

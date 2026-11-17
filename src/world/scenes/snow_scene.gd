@@ -28,9 +28,11 @@ func _init() -> void:
 		"side": "stone_wall", "side_tint": Color("#8e9ab4"),
 		"base_roughness": 0.8,
 	}
-	grass_count = 6000
+	grass_count = 9000
 	flower_count = 0
-	grass_tints = [Color("#b9c9b0"), Color("#dfe8d8"), Color("#cfc8a8")]
+	# 霜枯草圖集本身已經是枯黃到霜白，色調只做很輕的變化
+	grass_atlas = "grass_tuft_frost"
+	grass_tints = [Color("#f2efe6"), Color("#ffffff"), Color("#f6eed8")]
 	backdrop = {"kind": "terraces", "cliff_tint": Color("#aeb8cc"), "top": "snow", "tree_tint_a": Color("#8fb09a"), "tree_tint_b": Color("#6a8f86"), "snow": true}
 	ambient = {"dust": false, "fireflies": false, "clouds": true, "birds": 3, "snow": true}
 
@@ -44,9 +46,13 @@ func is_void(p: Vector2) -> bool:
 	return absf(p.x - _chasm_x(p.y)) < 3.6
 
 
+## 雪地上的枯草成叢長在雪堆、石頭附近的感覺：用低頻雜訊決定哪幾片有草。
+func grow_density(p: Vector2) -> float:
+	return smoothstep(0.52, 0.68, FoliageField.patch(p, 0.14, 4.1))
+
+
 func populate(w: GameWorld) -> void:
-	# 裂谷底：一片深色，加上往下變暗的岩壁，看起來深不見底
-	Build.box(w, Vector3(24.0, 0.2, 96.0), Vector3(9.0, -7.6, 0.0), Mats.flat(Color("#070a14"), 1.0))
+	_chasm(w)
 	w.place(SetPieces.rope_bridge(9.6, 2.5), Vector2(9.0, 0.0))
 
 	var ice := Mats.tri("ice", Color.WHITE, 0.08, 0.5)
@@ -99,3 +105,53 @@ func populate(w: GameWorld) -> void:
 	w.place(PropBuilder.fence(5.0), Vector2(3.4, 5.0), 88.0)
 	w.place(PropBuilder.fence(4.5), Vector2(3.6, -5.5), 84.0)
 	w.place(PropBuilder.fence(5.0), Vector2(15.2, 4.5), 95.0)
+
+
+
+## 裂谷：兩側岩壁錯落的岩架（上層積雪），谷底是結冰的溪流、雪堆和石頭。
+## 谷底抬到 5.5 公尺深：太深只會被霧吃成一片灰，讀不出是裂谷。
+const CHASM_FLOOR := -5.5
+
+
+func _chasm(w: GameWorld) -> void:
+	var rock := Mats.tri("stone_wall", Color("#9aa6be"), 0.95, 1.5)
+	var rock_dark := Mats.tri("stone_wall", Color("#6e7a94"), 0.95, 1.5)
+	var snow := Mats.tri("snow")
+	var ice := Mats.tri("ice", Color.WHITE, 0.08, 0.5)
+	Build.box(w, Vector3(14.0, 0.3, 96.0), Vector3(9.0, CHASM_FLOOR - 0.15, 0.0), snow)
+	for zi in range(-48, 48):
+		var z := zi + 0.5
+		Build.box(w, Vector3(1.8, 0.06, 1.02), Vector3(_chasm_x(z), CHASM_FLOOR + 0.03, z), ice)
+	for zi in range(-30, 30):
+		# 這一列的空洞範圍（1 公尺一格），岩壁就在它的兩側
+		var min_x := 99
+		var max_x := -99
+		for xi in range(0, 20):
+			if is_void(Vector2(xi + 0.5, zi + 0.5)):
+				min_x = mini(min_x, xi)
+				max_x = maxi(max_x, xi)
+		if min_x > max_x:
+			continue
+		for side: int in [-1, 1]:
+			var face: float = float(min_x) if side < 0 else float(max_x + 1)
+			var depth := w.rng.randf_range(0.7, 1.5)
+			for tier in 2:
+				if w.rng.randf() < 0.3:
+					depth += w.rng.randf_range(1.4, 2.2)
+					continue
+				var out := snappedf(w.rng.randf_range(0.375, 0.875), 0.125)
+				var cx: float = face - side * out * 0.5
+				Build.box(w, Vector3(out, 0.5, 1.0), Vector3(cx, -depth - 0.25, zi + 0.5), rock if tier == 0 else rock_dark)
+				if tier == 0:
+					Build.box(w, Vector3(out, 0.08, 1.0), Vector3(cx, -depth + 0.04, zi + 0.5), snow)
+				depth += w.rng.randf_range(1.4, 2.2)
+	# 谷底的雪堆與石頭
+	for i in 22:
+		var z := w.rng.randf_range(-28.0, 28.0)
+		var x := _chasm_x(z) + w.rng.randf_range(-2.6, 2.6)
+		if absf(x - _chasm_x(z)) < 1.2:
+			continue
+		if i % 2 == 0:
+			w.place(SetPieces.snow_mound(300 + i, w.rng.randf_range(0.5, 0.9)), Vector2(x, z), w.rng.randf() * 90.0, CHASM_FLOOR)
+		else:
+			w.place(PropBuilder.rock(400 + i, w.rng.randf_range(0.7, 1.3)), Vector2(x, z), w.rng.randf() * 360.0, CHASM_FLOOR)

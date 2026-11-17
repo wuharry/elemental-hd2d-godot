@@ -328,17 +328,21 @@ static func ice_spikes(spike_seed: int, s: float = 1.0) -> Node3D:
 	return root
 
 
-## 雪堆：幾層往上縮的雪方塊。
+## 雪堆：幾塊低矮、互相錯位的雪方塊疊成一座雪丘（置中疊高會像白色階梯金字塔）。
 static func snow_mound(mound_seed: int, s: float = 1.0) -> Node3D:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = mound_seed * 2003
 	var root := Node3D.new()
 	var snow := Mats.tri("snow")
-	var w := rng.randf_range(1.2, 2.2) * s
+	var w := rng.randf_range(1.4, 2.4) * s
 	var d := rng.randf_range(1.0, 1.8) * s
-	Build.box(root, Vector3(w, 0.25, d), Vector3(0, 0.1, 0), snow)
-	Build.box(root, Vector3(w * 0.7, 0.25, d * 0.7), Vector3(rng.randf_range(-0.1, 0.1), 0.3, 0), snow)
-	Build.box(root, Vector3(w * 0.4, 0.2, d * 0.4), Vector3(rng.randf_range(-0.1, 0.1), 0.5, 0), snow)
+	Build.box(root, Vector3(w, 0.18, d), Vector3(0, 0.07, 0), snow)
+	for i in 3 + rng.randi() % 3:
+		var bw := snappedf(rng.randf_range(0.35, 0.7) * w, 0.125)
+		var bd := snappedf(rng.randf_range(0.35, 0.7) * d, 0.125)
+		var bh := snappedf(rng.randf_range(0.12, 0.3) * s, 0.0625)
+		var off := Vector3(rng.randf_range(-0.3, 0.3) * w, 0.14 + bh * 0.5 + (0.12 if i > 2 else 0.0), rng.randf_range(-0.3, 0.3) * d)
+		Build.box(root, Vector3(bw, bh, bd), off, snow, Vector3(0, rng.randf_range(-20, 20), 0))
 	return root
 
 

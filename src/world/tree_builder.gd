@@ -45,13 +45,23 @@ static func conifer(tree_seed: int, s: float, tint: Color, snow: bool = false) -
 	var mats := [Mats.foliage(tint, 0.035), Mats.foliage(tint.darkened(0.12), 0.035)]
 	var sizes := [2.5, 2.0, 1.5, 1.0, 0.5]
 	var y := 1.0 * s
+	var snow_mat := Mats.tri("snow")
 	for i in sizes.size():
 		var w: float = sizes[i] * s
 		var h := 0.95 * s
-		Build.box(root, Vector3(w, h, w), Vector3(0, y + h * 0.5, 0), mats[i % 2], Vector3(0, 45.0 if i % 2 == 1 else 0.0, 0))
+		# 一般針葉樹層層錯開 45 度；積雪的層層同向，每層頂上露出一圈完整的雪
+		# （錯開時雪片會被上一層蓋到只剩四個角，看起來像紙三角）
+		var yaw := 45.0 if (i % 2 == 1 and not snow) else 0.0
+		Build.box(root, Vector3(w, h, w), Vector3(0, y + h * 0.5, 0), mats[i % 2], Vector3(0, yaw, 0))
 		if snow:
-			# 每一層頂上蓋一片雪
-			Build.box(root, Vector3(w * 0.86, 0.14, w * 0.86), Vector3(0, y + h + 0.05, 0), Mats.tri("snow"), Vector3(0, 45.0 if i % 2 == 1 else 0.0, 0))
+			Build.box(root, Vector3(w + 0.06, 0.16, w + 0.06), Vector3(0, y + h + 0.02, 0), snow_mat)
+			# 雪從層緣垂下來的幾小塊，打斷方正的輪廓
+			for k in 2 + rng.randi() % 3:
+				var side := rng.randi() % 4
+				var along := snappedf(rng.randf_range(-0.4, 0.4) * w, 0.125)
+				var edge := w * 0.5 + 0.02
+				var offset := Vector3(along, 0, edge) if side == 0 else (Vector3(along, 0, -edge) if side == 1 else (Vector3(edge, 0, along) if side == 2 else Vector3(-edge, 0, along)))
+				Build.box(root, Vector3(0.25, 0.22, 0.25), Vector3(0, y + h - 0.08, 0) + offset, snow_mat)
 		y += h * 0.82
 	root.rotation.y = rng.randf() * TAU
 	Build.collider(root, Vector3(0.5 * s, 3.0, 0.5 * s), Vector3(0, 1.5, 0))
