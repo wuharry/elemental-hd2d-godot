@@ -126,6 +126,7 @@ static func campfire() -> Node3D:
 	light.omni_attenuation = 1.4
 	light.shadow_enabled = true
 	light.shadow_blur = 2.5
+	light.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
 	light.light_volumetric_fog_energy = 0.5
 	light.set_script(load("res://src/world/flicker_light.gd"))
 	root.add_child(light)

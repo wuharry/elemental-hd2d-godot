@@ -60,6 +60,8 @@ static func warm_light(parent: Node3D, pos: Vector3, energy: float, light_range:
 	l.omni_range = light_range
 	l.omni_attenuation = 1.3
 	l.shadow_enabled = shadow
+	# 雙拋物面陰影只畫 2 面（立方體 6 面）；方塊幾何看不出差別，夜晚 draw call 少很多
+	l.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
 	l.shadow_blur = 2.0
 	l.light_volumetric_fog_energy = 0.4
 	l.light_energy = 0.0

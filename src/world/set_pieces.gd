@@ -158,6 +158,8 @@ static func brazier() -> Node3D:
 	light.omni_attenuation = 1.3
 	light.shadow_enabled = true
 	light.shadow_blur = 2.5
+	# 雙拋物面陰影只畫 2 面（立方體要畫 6 面）；方塊幾何看不出差別，地下城 draw call 少很多
+	light.omni_shadow_mode = OmniLight3D.SHADOW_DUAL_PARABOLOID
 	light.light_volumetric_fog_energy = 0.5
 	light.set_script(load("res://src/world/flicker_light.gd"))
 	light.set("base_energy", 4.2)
