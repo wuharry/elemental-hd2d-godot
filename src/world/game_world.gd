@@ -101,7 +101,7 @@ func _ambient() -> void:
 	if a.get("clouds", false):
 		add_child(AmbientLife.clouds())
 	if int(a.get("birds", 0)) > 0:
-		add_child(AmbientLife.birds(int(a["birds"]), a.get("bird_height", Vector2(6.5, 9.5)), a.get("bird_tint", Color("#3a3440"))))
+		add_child(AmbientLife.birds(int(a["birds"]), a.get("bird_height", Vector2(6.5, 9.5)), a.get("bird_tint", Color("#3a3440")), a.get("bird_orbit", 1.0)))
 	if a.get("snow", false):
 		add_child(AmbientLife.snowfall())
 	for p in leaf_emitters:

@@ -158,7 +158,7 @@ static func brazier() -> Node3D:
 	light.omni_attenuation = 1.3
 	light.shadow_enabled = true
 	light.shadow_blur = 2.5
-	light.light_volumetric_fog_energy = 0.6
+	light.light_volumetric_fog_energy = 0.5
 	light.set_script(load("res://src/world/flicker_light.gd"))
 	light.set("base_energy", 4.2)
 	root.add_child(light)
@@ -362,4 +362,99 @@ static func dais(size: float) -> Node3D:
 	Build.box(root, Vector3(1.2, 0.9, 1.2), Vector3(0, 0.95, 0), trim)
 	Build.box(root, Vector3(1.5, 0.16, 1.5), Vector3(0, 1.46, 0), stone)
 	Build.collider(root, Vector3(size - 0.6, 2.0, size - 0.6), Vector3(0, 1.0, 0))
+	return root
+
+
+
+## 正門：石框 + 鐵柵 + 門後一片黑。原點貼牆、面朝 +Z。
+static func portcullis_gate(width: float, height: float) -> Node3D:
+	var root := Node3D.new()
+	var stone := Mats.tri("stone_wall", Color("#9d99a6"), 0.95, 1.4)
+	var iron := Mats.metal(Color("#4a4650"))
+	Build.box(root, Vector3(width + 0.4, height + 0.2, 0.3), Vector3(0, (height + 0.2) * 0.5, 0.0), Mats.flat(Color("#050507"), 1.0))
+	Build.box(root, Vector3(0.8, height + 0.6, 0.9), Vector3(-width * 0.5 - 0.4, (height + 0.6) * 0.5, 0.3), stone)
+	Build.box(root, Vector3(0.8, height + 0.6, 0.9), Vector3(width * 0.5 + 0.4, (height + 0.6) * 0.5, 0.3), stone)
+	Build.box(root, Vector3(width + 1.6, 0.9, 0.9), Vector3(0, height + 0.45, 0.3), stone)
+	Build.box(root, Vector3(1.0, 0.7, 1.0), Vector3(0, height + 0.5, 0.38), Mats.tri("brick", Color("#c0b0b4"), 0.95, 1.3))
+	var bars := int(width / 0.45)
+	for i in bars:
+		var x := -width * 0.5 + (i + 0.5) * (width / bars)
+		Build.box(root, Vector3(0.1, height, 0.1), Vector3(x, height * 0.5, 0.35), iron)
+	for y in [height * 0.3, height * 0.7]:
+		Build.box(root, Vector3(width, 0.12, 0.12), Vector3(0, y, 0.38), iron)
+	for x in [-width * 0.5 - 0.4, width * 0.5 + 0.4]:
+		Build.box(root, Vector3(0.9, 0.3, 1.1), Vector3(x, 0.15, 0.4), stone)
+	Build.collider(root, Vector3(width + 1.6, 4.0, 1.0), Vector3(0, 2.0, 0.3))
+	return root
+
+
+## 一叢蠟燭：放在地上或石台上。暖光，跟路燈一樣由 TimeOfDay 的 lamps 控制亮度。
+static func candles(candle_seed: int) -> Node3D:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = candle_seed * 9001
+	var root := Node3D.new()
+	var wax := Mats.flat(Color("#efe4c8"))
+	var flame := Mats.emissive(Color("#ffc060"), 4.0)
+	for i in 3 + rng.randi() % 3:
+		var h := snappedf(rng.randf_range(0.12, 0.38), 0.03125)
+		var p := Vector3(rng.randf_range(-0.3, 0.3), 0, rng.randf_range(-0.25, 0.25))
+		Build.box(root, Vector3(0.09, h, 0.09), p + Vector3(0, h * 0.5, 0), wax)
+		Build.box(root, Vector3(0.05, 0.07, 0.05), p + Vector3(0, h + 0.04, 0), flame)
+	Build.box(root, Vector3(0.8, 0.04, 0.6), Vector3(0, 0.02, 0), Mats.flat(Color("#d8ccb0")))
+	Build.warm_light(root, Vector3(0, 0.6, 0.2), 1.6, 4.5)
+	return root
+
+
+## 從天花板垂下的鐵鏈：原點在頂端，往下 length 公尺，最下面掛一個鉤子。
+static func chain(length: float) -> Node3D:
+	var root := Node3D.new()
+	var iron := Mats.metal(Color("#3e3b44"))
+	var links := int(length / 0.22)
+	for i in links:
+		var y := -0.11 - i * 0.22
+		if i % 2 == 0:
+			Build.box(root, Vector3(0.12, 0.2, 0.04), Vector3(0, y, 0), iron)
+		else:
+			Build.box(root, Vector3(0.04, 0.2, 0.12), Vector3(0, y, 0), iron)
+	var bottom := -links * 0.22
+	Build.box(root, Vector3(0.06, 0.24, 0.06), Vector3(0.0, bottom - 0.1, 0), iron)
+	Build.box(root, Vector3(0.2, 0.06, 0.06), Vector3(0.07, bottom - 0.22, 0), iron)
+	return root
+
+
+## 石棺：棺身 + 錯開一點的棺蓋 + 蓋上的浮雕條。
+static func sarcophagus(lid_offset: float) -> Node3D:
+	var root := Node3D.new()
+	var stone := Mats.tri("stone_wall", Color("#a8a4b0"), 0.95, 1.4)
+	var lid := Mats.tri("flagstone", Color("#bcb8c4"), 0.9, 1.3)
+	Build.box(root, Vector3(1.1, 0.7, 2.2), Vector3(0, 0.35, 0), stone)
+	Build.box(root, Vector3(1.24, 0.14, 2.36), Vector3(0.0, 0.07, 0), stone)
+	Build.box(root, Vector3(1.2, 0.2, 2.3), Vector3(lid_offset, 0.8, lid_offset * 0.6), lid, Vector3(0, lid_offset * 14.0, 0))
+	Build.box(root, Vector3(0.3, 0.08, 1.4), Vector3(lid_offset, 0.94, lid_offset * 0.6), Mats.flat(Color("#e8bd4c"), 0.6), Vector3(0, lid_offset * 14.0, 0))
+	Build.collider(root, Vector3(1.2, 1.4, 2.3), Vector3(0, 0.7, 0))
+	return root
+
+
+## 地上的水窪：薄薄一層反光水面。
+static func puddle(size: Vector2) -> Node3D:
+	var root := Node3D.new()
+	var water := Build.box(root, Vector3(size.x, 0.02, size.y), Vector3(0, 0.012, 0), water_mat(Vector2.ZERO, Color("#151a26"), Color("#2c3646")))
+	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var half := size * 0.5
+	Build.box(root, Vector3(size.x * 0.5, 0.02, size.y * 0.4), Vector3(half.x * 0.6, 0.012, -half.y * 0.5), water.material_override)
+	return root
+
+
+## 牆上的苔蘚：貼在牆面（面朝 +Z）的幾塊葉子方塊，不隨風晃。
+static func wall_moss(moss_seed: int, width: float) -> Node3D:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = moss_seed * 7001
+	var root := Node3D.new()
+	var mats := [Mats.foliage(Color("#b8d090"), 0.0), Mats.foliage(Color("#90b078"), 0.0)]
+	var x := -width * 0.5
+	while x < width * 0.5:
+		var w := snappedf(rng.randf_range(0.375, 0.875), 0.125)
+		var h := snappedf(rng.randf_range(0.25, 1.5), 0.125)
+		Build.box(root, Vector3(w, h, 0.125), Vector3(x + w * 0.5, h * 0.5, 0.06), mats[rng.randi() % 2])
+		x += w
 	return root

@@ -13,7 +13,8 @@ const MOSS := [
 func _init() -> void:
 	id = "dungeon"
 	title = "地下城大廳"
-	player_start = Vector3(0.0, 0.0, 8.5)
+	# 站在大廳中央：開場畫面要同時看到前景水道、兩側火盆、天光祭壇與後牆正門（BLUEPRINT 第 8 節）
+	player_start = Vector3(0.0, 0.0, 1.2)
 	play_half = Vector2(20.0, 12.0)
 	paths = [
 		{"pts": [Vector2(0, 13), Vector2(0, -9)], "width": 3.2},
@@ -33,7 +34,7 @@ func _init() -> void:
 	grass_tints = [Color("#6f9a6a"), Color("#8fb480"), Color("#a8b070")]
 	outer_ground = false
 	backdrop = {"kind": "walls", "wall": "brick", "wall_tint": Color("#a89ca4"), "height": 9.0, "skylight": Rect2(-3.0, -13.0, 6.0, 5.0)}
-	ambient = {"dust": true, "fireflies": false, "clouds": false, "birds": 4, "bird_height": Vector2(3.5, 5.5), "bird_tint": Color("#2a2430"), "snow": false}
+	ambient = {"dust": true, "fireflies": false, "clouds": false, "birds": 4, "bird_height": Vector2(4.5, 7.0), "bird_tint": Color("#2a2430"), "bird_orbit": 0.55, "snow": false}
 
 
 func is_void(p: Vector2) -> bool:
@@ -63,10 +64,10 @@ func grow_density(_p: Vector2) -> float:
 
 
 func populate(w: GameWorld) -> void:
-	var deep := Color("#0c2630")
-	var shallow := Color("#1f5a66")
-	w.add_child(SetPieces.water_fill(Rect2(-21, 3, 42, 2), -0.5, Vector2(0.5, 0.0), deep, shallow))
-	w.add_child(SetPieces.water_fill(Rect2(-9, -13, 2, 16), -0.5, Vector2(0.0, 0.5), deep, shallow))
+	var deep := Color("#143e4c")
+	var shallow := Color("#2e7a86")
+	w.add_child(SetPieces.water_fill(Rect2(-21, 3, 42, 2), -0.3, Vector2(0.5, 0.0), deep, shallow))
+	w.add_child(SetPieces.water_fill(Rect2(-9, -13, 2, 16), -0.3, Vector2(0.0, 0.5), deep, shallow))
 	w.place(SetPieces.stone_bridge(2.6, 3.0), Vector2(0.0, 4.0), 90.0)
 	w.place(SetPieces.stone_bridge(2.6, 3.0), Vector2(12.5, 4.0), 90.0)
 	w.place(SetPieces.stone_bridge(2.6, 2.0), Vector2(-8.0, -5.0))
@@ -83,12 +84,33 @@ func populate(w: GameWorld) -> void:
 	w.place(SetPieces.crystals(81, Color("#9fe8ff"), 1.3), Vector2(0.0, -5.2), 0.0, 1.54)
 	w.place(SetPieces.brazier(), Vector2(-3.6, -2.4))
 	w.place(SetPieces.brazier(), Vector2(3.6, -2.4))
-	w.place(SetPieces.brazier(), Vector2(-12.0, 7.0))
-	w.place(SetPieces.brazier(), Vector2(9.0, 8.0))
+	# 玩家左右兩側各一個，照亮大廳兩翼的地板
+	w.place(SetPieces.brazier(), Vector2(-11.5, 1.5))
+	w.place(SetPieces.brazier(), Vector2(10.0, 0.8))
 	for x in [-15.0, -3.0, 3.0, 15.0]:
 		w.place(SetPieces.wall_torch(), Vector2(x, -HALL.y), 0.0, 3.2)
 	w.place(SetPieces.banner(Color("#8a2a38"), 3.2), Vector2(-9.0, -HALL.y), 0.0, 7.4)
 	w.place(SetPieces.banner(Color("#2a6a78"), 3.2), Vector2(9.0, -HALL.y), 0.0, 7.4)
+	# 後牆正中的正門：大廳的地標
+	w.place(SetPieces.portcullis_gate(3.2, 3.4), Vector2(0.0, -HALL.y))
+	# 石柱腳下與祭壇階上的蠟燭
+	for x in [-13.0, -4.5, 4.5, 13.0]:
+		w.place(SetPieces.candles(int(x * 10.0) + 500), Vector2(x + 0.2, -7.7), w.rng.randf() * 360.0)
+	for x in [-1.5, 1.5]:
+		w.place(SetPieces.candles(int(x * 10.0) + 600), Vector2(x, -3.4), 0.0, 0.5)
+	# 天花板垂下的鐵鏈
+	for c in [Vector3(-6.0, 4.5, -6.5), Vector3(6.5, 5.5, -4.0), Vector3(-10.5, 4.0, 1.5), Vector3(9.5, 3.5, 0.5), Vector3(-2.5, 6.0, -10.5)]:
+		w.place(SetPieces.chain(c.y), Vector2(c.x, c.z), w.rng.randf() * 90.0, 10.0)
+	# 兩側的石棺、地上的水窪、牆腳的苔蘚與碎石
+	w.place(SetPieces.sarcophagus(0.18), Vector2(-17.0, -6.5), 90.0)
+	w.place(SetPieces.sarcophagus(-0.12), Vector2(17.5, 1.8), 90.0)
+	for pd in [[Vector2(-6.0, 7.5), Vector2(1.4, 0.9)], [Vector2(3.5, 7.2), Vector2(1.0, 0.8)], [Vector2(-10.5, -2.6), Vector2(1.6, 1.0)], [Vector2(14.0, 6.0), Vector2(1.2, 1.2)], [Vector2(6.5, -8.0), Vector2(1.0, 0.7)]]:
+		w.place(SetPieces.puddle(pd[1]), pd[0], w.rng.randf() * 40.0)
+	for m in [[Vector2(-18.0, -HALL.y), 0.0, 3.0], [Vector2(7.0, -HALL.y), 0.0, 2.5], [Vector2(17.0, -HALL.y), 0.0, 2.0], [Vector2(-HALL.x, 4.0), 90.0, 3.0], [Vector2(HALL.x, -6.0), -90.0, 2.5]]:
+		w.place(SetPieces.wall_moss(int(m[0].x * 7.0 + m[0].y), m[2]), m[0], m[1])
+	for c in [Vector2(-19.0, -11.5), Vector2(19.5, -11.8), Vector2(-19.5, 10.5), Vector2(19.0, 11.0)]:
+		for i in 3:
+			w.place(PropBuilder.rock(int(c.x * 3.0) + i * 17, w.rng.randf_range(0.6, 1.1)), c + Vector2(w.rng.randf_range(-1.0, 1.0), w.rng.randf_range(-0.8, 0.8)), w.rng.randf() * 360.0)
 
 	# 齒輪機關：地上一大一小互相咬合，牆上再掛一個
 	var bronze := Color("#b8863c")

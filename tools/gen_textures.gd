@@ -480,30 +480,78 @@ func _ice() -> void:
 	_save_normal(hgt, S, S, 1.0, "ice_n")
 
 
-## 地下城的方形石板：16px 一塊。
+## 地下城的石板：錯縫的大小石板（不是規則方格），少數有短裂痕、缺角。
+## 四列高度 16／12／20／16 = 64，每列寬度加起來剛好 64，所以上下左右都能無縫拼接。
 func _flagstone() -> void:
 	var img := _new()
-	var pal := _hex(["#6c6a78", "#777584", "#82808f", "#8d8b9a"])
+	var pal := _hex(["#6a6876", "#74727f", "#7e7c8a", "#888694", "#787082"])
 	var gap := Color.html("#34323e")
 	var hgt := PackedFloat32Array()
 	hgt.resize(S * S)
+	var rows := [[0, 16], [16, 12], [28, 20], [48, 16]]
+	var choices := [12, 16, 20, 24]
+	var layout: Array = []   # 每列：[起點位移, [寬度...]]
+	for r in rows.size():
+		var widths: Array = []
+		var total := 0
+		var k := 0
+		while total < S:
+			var w: int = choices[int(_hash(r, k, 181) * choices.size()) % choices.size()]
+			if S - total - w < 8 and S - total - w != 0:
+				w = S - total
+			widths.append(w)
+			total += w
+			k += 1
+		layout.append([int(_hash(r, 0, 182) * S), widths])
+	var cracks := {}   # 裂痕像素
+	for r in rows.size():
+		var widths: Array = layout[r][1]
+		var start := 0
+		for i in widths.size():
+			var slab_id := r * 16 + i
+			if _hash(slab_id, 3, 183) < 0.2:
+				var cx: int = start + 3 + int(_hash(slab_id, 4, 184) * maxf(widths[i] - 6, 1))
+				var cy: int = int(rows[r][0]) + 3 + int(_hash(slab_id, 5, 185) * maxf(int(rows[r][1]) - 6, 1))
+				var dx := 1 if _hash(slab_id, 6, 186) > 0.5 else -1
+				for step in 4 + int(_hash(slab_id, 7, 187) * 4.0):
+					cracks[Vector2i(posmod(cx - int(layout[r][0]), S), cy)] = true
+					cx += dx
+					cy += 1 if _hash(slab_id, step, 188) > 0.45 else 0
+			start += widths[i]
 	for y in S:
+		var r := 0
+		while r < rows.size() - 1 and y >= int(rows[r + 1][0]):
+			r += 1
+		var yy: int = y - int(rows[r][0])
+		var h: int = rows[r][1]
+		var widths: Array = layout[r][1]
 		for x in S:
-			var tx: int = x / 16
-			var ty: int = y / 16
-			var xx: int = x % 16
-			var yy: int = y % 16
-			var c: Color = _pal(pal, _hash(tx, ty, 161) * 0.7 + _hash(x, y, 162) * 0.3)
-			var seam: bool = xx == 0 or yy == 0
-			# 少數石板有一道裂痕
-			if _hash(tx, ty, 163) > 0.7 and absi(xx - yy - int(_hash(tx, ty, 164) * 6.0) + 3) == 0 and xx > 2 and xx < 13:
+			var xs: int = posmod(x + int(layout[r][0]), S)
+			var i := 0
+			var start := 0
+			while xs >= start + int(widths[i]):
+				start += widths[i]
+				i += 1
+			var xx: int = xs - start
+			var w: int = widths[i]
+			var slab_id := r * 16 + i
+			var c: Color = _pal(pal, _hash(slab_id, 1, 189) * 0.75 + _hash(x, y, 190) * 0.25)
+			var seam := xx == 0 or yy == 0
+			# 缺角：讓石板邊角不那麼方正
+			if not seam and _hash(slab_id, 2, 191) > 0.55 and xx <= 1 and yy <= 1:
 				seam = true
-			if seam:
+			var crack: bool = cracks.has(Vector2i(x, y))
+			if seam or crack:
 				c = gap
 			img.set_pixel(x, y, c)
-			hgt[y * S + x] = 0.0 if seam else (0.75 if (xx == 1 or yy == 1 or xx == 15 or yy == 15) else 0.9) + _hash(x, y, 165) * 0.1
+			var v := 0.85 + _hash(x, y, 192) * 0.1
+			if xx == 1 or yy == 1 or xx == w - 1 or yy == h - 1:
+				v = 0.62
+			if crack:
+				v = 0.25
+			hgt[y * S + x] = 0.0 if seam else v
 	_save(img, "flagstone")
-	_save_normal(hgt, S, S, 2.2, "flagstone_n")
+	_save_normal(hgt, S, S, 1.8, "flagstone_n")
 
 
 ## 地下城的磚牆：每塊 16x8，隔列錯開。

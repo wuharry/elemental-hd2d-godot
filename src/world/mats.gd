@@ -39,8 +39,9 @@ static func metal(tint: Color) -> StandardMaterial3D:
 	var key := "metal:%s" % tint.to_html()
 	if _cache.has(key):
 		return _cache[key]
-	var m: StandardMaterial3D = tri("stone_wall", tint, 0.42, 0.8).duplicate()
-	m.metallic = 0.75
+	# 金屬度不能太高：地下城的天空是黑的，高金屬度只會反射一片黑，銅色就不見了
+	var m: StandardMaterial3D = tri("stone_wall", tint, 0.5, 0.8).duplicate()
+	m.metallic = 0.35
 	_cache[key] = m
 	return m
 

@@ -61,10 +61,10 @@ const PRESETS := {
 		"dungeon": {
 			"*": {
 				"sun_yaw": 180.0, "sun_pitch": -62.0,
-				"ambient_color": Color("#343a5e"), "ambient_energy": 0.6,
+				"ambient_color": Color("#3a4272"), "ambient_energy": 0.85,
 				"sky_top": Color("#04050a"), "sky_horizon": Color("#080a12"),
 				"fog_color": Color("#141a2a"), "fog_density": 0.003,
-				"vol_density": 0.03, "vol_albedo": Color("#c8d4ff"),
+				"vol_density": 0.01, "vol_albedo": Color("#c8d4ff"),
 				"lamps": 1.2, "night": 0.0, "saturation": 1.12, "glow": 0.9,
 			},
 			"morning": {"sun_color": Color("#ffd2a0"), "sun_energy": 3.0},

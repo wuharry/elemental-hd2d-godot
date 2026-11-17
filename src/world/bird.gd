@@ -12,12 +12,14 @@ var _left: Node3D
 var _right: Node3D
 
 
-func setup(index: int, height: Vector2 = Vector2(6.5, 9.5), tint: Color = Color("#3a3440")) -> void:
+## orbit：繞圈半徑的縮放（室內場景用小於 1，才不會飛出牆外）。
+func setup(index: int, height: Vector2 = Vector2(6.5, 9.5), tint: Color = Color("#3a3440"), orbit: float = 1.0) -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 500 + index * 91
 	_center = Vector3(rng.randf_range(-6, 6), 0, rng.randf_range(-8, 2))
-	_rx = rng.randf_range(16, 28)
-	_rz = rng.randf_range(9, 16)
+	_rx = rng.randf_range(16, 28) * orbit
+	_rz = rng.randf_range(9, 16) * orbit
+	_center *= orbit
 	_speed = rng.randf_range(0.22, 0.34) * (1.0 if index % 2 == 0 else -1.0)
 	_phase = rng.randf() * TAU
 	_height = rng.randf_range(height.x, height.y)

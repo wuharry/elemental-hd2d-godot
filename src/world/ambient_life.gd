@@ -211,14 +211,14 @@ static func butterflies(homes: Array[Vector3]) -> Node3D:
 	return root
 
 
-static func birds(count: int, height: Vector2 = Vector2(6.5, 9.5), tint: Color = Color("#3a3440")) -> Node3D:
+static func birds(count: int, height: Vector2 = Vector2(6.5, 9.5), tint: Color = Color("#3a3440"), orbit: float = 1.0) -> Node3D:
 	var root := Node3D.new()
 	var script: Script = load("res://src/world/bird.gd")
 	for i in count:
 		var b := Node3D.new()
 		b.set_script(script)
 		root.add_child(b)
-		b.call("setup", i, height, tint)
+		b.call("setup", i, height, tint, orbit)
 	return root
 
 
