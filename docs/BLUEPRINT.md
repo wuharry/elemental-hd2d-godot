@@ -75,10 +75,11 @@ godot --headless --path . --import                                # 讓引擎重
 godot --headless --path . --script res://tests/run_tests.gd       # 純邏輯測試
 godot --headless --path . --script res://tests/hud_input_test.gd  # 操作路徑測試（載入真正的 main 場景送觸控事件）
 godot --headless --path . --script res://tests/player_animation_test.gd # 四方向、瞄準、動畫
-godot --headless --path . --script res://tests/style_test.gd      # 四場景組裝、切換與像素規格（不是視覺驗收）
+godot --headless --path . --script res://tests/style_test.gd      # 四場景組裝與切換 + 逐場景硬規則（第 2、8 節；不是視覺驗收）
 godot --headless --path . --script res://tests/mesh_batch_test.gd # 合併前後幾何與材質資料
 zsh tests/capture_test.sh                                       # 缺圖、舊圖、失敗、逾時必須回報失敗
-tools/capture.sh                                                  # 開視窗拍四個時段到 test_output/（可加 --nohud、--pos=x,z、--shots=day,night、--tag=名稱）
+tools/capture.sh                                                  # 開視窗拍四個時段到 test_output/（可加 --scene=、--nohud、--pos=x,z、--shots=day,night、--tag=名稱）
+godot --headless --path . --script res://tools/contact_sheet.gd   # 場景 × 時段總表 test_output/contact_sheet.png（先用 --tag=<場景> 拍齊）
 godot --path .                                                    # 實際遊玩
 ```
 
@@ -92,3 +93,41 @@ godot --path .                                                    # 實際遊玩
 2. 不新增第二套做法：材質一律經 `Mats`，光影數值一律進 `PRESETS`，貼圖一律經產生器。
 3. `.uid`、`.import`、`.godot/` 不手改。
 4. 做完更新 HANDOFF 的進度表，寫清楚 `PASS`／`FAIL`／`NOT RUN`。
+
+## 8. 場景守則（新增或修改場景時照做）
+
+場景跟村莊是不是同一個遊戲，取決於這一節。標「自動」的由 `tests/style_test.gd` 逐場景檢查：場景加進 `Scenes.LIST` 就會受檢，不用改測試。標「看圖」的要拍圖對照村莊。
+
+| # | 規則 | 怎麼驗 |
+| --- | --- | --- |
+| S1 | 一個場景一個檔：`src/world/scenes/<id>_scene.gd` 繼承 `SceneDef`，`id` 跟檔名相同，並加進 `Scenes.LIST` | 自動 |
+| S2 | 場景檔只放資料與擺放。不准自己 new 材質、網格、燈光、粒子或環境，不准改 `scale`，不准直接 `load` 貼圖 | 自動（靜態掃描） |
+| S3 | 東西只從共用零件來：`Build`、`HouseBuilder`、`TreeBuilder`、`PropBuilder`、`SetPieces`、`AmbientLife`。缺零件就加進 `SetPieces`，一樣守 A1–A6 | 自動（A1–A6 逐節點） |
+| S4 | 光影差異只寫在 `TimeOfDay.PRESETS.scene_overrides[id]`，而且只能覆寫基底已有的欄位 | 自動 |
+| S5 | 亮燈時段（`lamps > 0`）的 `vol_density ≤ 0.02`、暖燈 `light_volumetric_fog_energy ≤ 0.5`、窗光 `≤ 3` | 自動 |
+| S6 | 人造光一律暖色（色相 ≤ 0.14 或 ≥ 0.95、飽和 ≥ 0.3）。冷色魔法光（水晶）要加進 `magic_lights` 群組 | 自動 |
+| S7 | 開場畫面要有暖冷對比：出生點 12 公尺內至少一個暖色光源 | 自動 |
+| S8 | 會動的東西至少四種：`AmbientLife.KINDS`，每個工廠函式回傳前呼叫 `tag()` | 自動 |
+| S9 | Q 版比例：房屋底層 1.6–1.9 公尺、每層 1.5–1.75 公尺（A11） | 自動 |
+| S10 | 開場畫面的構圖：前景有東西給景深糊掉；中景是玩家加一個地標（營火、橋、祭壇、正門）；背景有台地、樹林或牆擋住地平線 | 看圖 |
+| S11 | 細節密度跟村莊同級：畫面每一區都要有東西，不能有大片空地板或空雪地。地下城第一版只有 595 個節點，看起來就是空的 | 看圖 |
+| S12 | 地面用三層加側面貼圖。草叢依環境換圖集（`grass_tuft`／`grass_tuft_frost`），不要用色調把綠草硬染成別的顏色 | 看圖 |
+
+驗收順序：`style_test.gd` 全過 → 拍四個時段 → `tools/contact_sheet.gd` 排成總表 → 跟村莊同一欄比。總表印出的亮度數字只是輔助，數字正常不代表畫面對。
+
+做場景時踩過的坑（2026-11-17）：
+
+- **暗場景先查霧，再調燈。** 地下城體積霧 0.03 時整片霧濛濛；只改成 0.01 做 A/B，地板、水道、石階就出來了。
+- **高金屬度在黑天空場景會變一片黑**：金屬只反射天空。`Mats.metal` 的金屬度固定 0.35。
+- **錯層 45° 的針葉樹加雪片，雪只露出四個角**，看起來像紙三角。積雪的針葉樹要層層同向。
+- **裂谷太深會被霧吃成一片灰。** 谷底放在約 5.5 公尺深，岩壁加錯落的岩架，谷底要有東西。
+- **開陰影的點光源用雙拋物面**（`omni_shadow_mode = SHADOW_DUAL_PARABOLOID`）：立方陰影要畫 6 面，雙拋物面只畫 2 面。
+
+## 9. 角色守則（之後的角色、敵人、隊友）
+
+- **風格**：參考 `docs/reference/characters/`（Harvey 指定 Crusaders Quest 那種 Q 版像素風）。只學比例與畫法：大頭小身體、不對稱髮束、彩色描邊、誇張的裝備剪影。不照抄任何現有角色的造型、配色或圖。參考圖只放在 repo 裡給人看，不打包進遊戲。
+- **規格**：圖格 56×48，32 px／公尺（`pixel_size = 1/32`），可見身高約 44px（約 1.4 公尺，A11）。腳底對齊圖格底部。alpha 只能是 0 或 255，因為角色走 `alpha_cut`（A9）。
+- **描邊**：外框取相鄰那格顏色加深，再往墨色 `#302a43` 拉近，最後吸附到色盤裡的描邊色。不要用一整圈純黑。
+- **主角色盤鎖定**：主角（書騎士）固定 34 色，Harvey 2026-11-17 決定細修不准加色，`player_animation_test.gd` 會擋。新角色可以另開色盤；下面是我（agent）的建議，Harvey 尚未拍板：每個角色也控制在 34 色內，沿用同一套描邊做法。
+- **動畫**：圖集 6 欄 × 3 列。三列依序是正面、背面、側面，每列 2 格待機加 4 格走路；左側用鏡像。新角色沿用同一套排法，`player.gd` 的換格邏輯才能共用。
+- **產生方式**：照 A5，角色圖由 `tools/gen_character.gd` 這類產生器輸出，不手改 PNG。
