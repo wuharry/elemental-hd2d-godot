@@ -21,7 +21,7 @@
 | A2 | 貼圖一律 nearest | 世界用 `NEAREST_WITH_MIPMAPS`，角色與 UI 用 `NEAREST` | 糊掉的像素不是像素風 |
 | A3 | 幾何只用方塊與三角柱 | `BoxMesh`、`PrismMesh`、交叉面片（花草）；可將這些原始幾何合併成 `ArrayMesh`，不改形狀；不用圓柱、球、平滑曲面 | 體素感來自方塊，圓滑幾何會出戲 |
 | A4 | 貼圖不畫光影 | 貼圖只放固有色與 `_n` 法線圖；明暗全部交給即時光 | 四個時段共用同一套貼圖，畫死的陰影在夜晚會穿幫 |
-| A5 | 貼圖不手改 | 改 `tools/gen_textures.gd`、`tools/gen_character.gd` 後重跑；PNG 是產物 | 可重現，也能一次調整全套色調 |
+| A5 | 貼圖不手改 | 改 `tools/gen_textures.gd`、`tools/gen_character.gd` 或 `tools/gen_element_icons.gd` 後重跑；PNG 是產物 | 可重現，也能一次調整全套色調 |
 | A6 | 方塊貼圖走 triplanar | `Mats.tri()`（local triplanar），用 `BoxMesh.size` 定尺寸，**不要用 node scale**；合併時由 `Mats.batched_tri()` 與頂點自訂欄位保留原始座標、法線與切線 | scale 會把像素拉長，破壞 A1 |
 | A7 | 光影數值只放一處 | 四個時段的太陽、環境光、霧、窗光、路燈全部在 `src/world/time_of_day.gd` 的 `PRESETS` | 調色時不用滿專案找數字 |
 | A8 | 暖冷對比 | 人造光（窗、路燈、營火）一律暖色；陰影與夜晚環境光偏冷 | 兩張參考圖的氛圍都靠這個 |
@@ -47,9 +47,9 @@ main.tscn ── src/main.gd（組裝根：只負責把下面的東西接起來�
    │    └─ AmbientLife     落葉、蝴蝶、鳥、煙、塵埃、螢火蟲、雲影
    │    完成組裝後由 MeshBatcher 合併可安全合併的靜態網格，保留碰撞與動態子樹
    ├─ TimeOfDay      src/world/time_of_day.gd      四個時段與過場
-   ├─ Player         src/player/player.gd          移動 + 像素角色 + 元素佇列
+   ├─ Player         src/player/player.gd          移動、像素角色、元素佇列與周身光點
    ├─ CameraRig      src/player/camera_rig.gd      跟隨 + 景深對焦
-   └─ Hud            src/ui/hud.gd                 雙搖桿、元素鍵、融合鍵、佇列顯示
+   └─ Hud            src/ui/hud.gd                 雙搖桿、四元素圖示鍵、融合鍵
 src/combat/elements.gd、element_queue.gd：純邏輯（RefCounted，不碰節點），可單獨測試
 ```
 
@@ -70,11 +70,13 @@ src/combat/elements.gd、element_queue.gd：純邏輯（RefCounted，不碰節�
 ```bash
 cd /Users/harvey/repo/elemental-hd2d-godot
 godot --headless --path . --script res://tools/gen_textures.gd    # 重產世界貼圖
-godot --headless --path . --script res://tools/gen_character.gd   # 重產角色與圖示
+godot --headless --path . --script res://tools/gen_character.gd   # 重產角色
+godot --headless --path . --script res://tools/gen_element_icons.gd # 重產四種元素圖示與環繞光點貼圖
 godot --headless --path . --import                                # 讓引擎重新匯入（.import 由引擎產生，不手改）
 godot --headless --path . --script res://tests/run_tests.gd       # 純邏輯測試
 godot --headless --path . --script res://tests/hud_input_test.gd  # 操作路徑測試（載入真正的 main 場景送觸控事件）
 godot --headless --path . --script res://tests/player_animation_test.gd # 四方向、瞄準、動畫
+godot --headless --path . --script res://tests/element_orbit_test.gd # 佇列狀態與角色周身光點
 godot --headless --path . --script res://tests/style_test.gd      # 四場景組裝與切換 + 逐場景硬規則（第 2、8 節；不是視覺驗收）
 godot --headless --path . --script res://tests/mesh_batch_test.gd # 合併前後幾何與材質資料
 zsh tests/capture_test.sh                                       # 缺圖、舊圖、失敗、逾時必須回報失敗
@@ -127,7 +129,10 @@ godot --path .                                                    # 實際遊玩
 
 - **風格**：參考 `docs/reference/characters/`（Harvey 指定 Crusaders Quest 那種 Q 版像素風）。只學比例與畫法：大頭小身體、不對稱髮束、彩色描邊、誇張的裝備剪影。不照抄任何現有角色的造型、配色或圖。參考圖只放在 repo 裡給人看，不打包進遊戲。
 - **規格**：圖格 56×48，32 px／公尺（`pixel_size = 1/32`），可見身高約 44px（約 1.4 公尺，A11）。腳底對齊圖格底部。alpha 只能是 0 或 255，因為角色走 `alpha_cut`（A9）。
+- **二頭身的量法**：以站立待機圖的顱頂、下巴、腳底三條基準線，核對「顱頂至下巴」與「下巴至腳底」約等長。量測先拿掉帽子，法杖與頭飾也不計入人體身高。帶帽的可見高度另依 A11 檢查。[第一輪原始要求](reference/round1_brief.png)
 - **描邊**：外框取相鄰那格顏色加深，再往墨色 `#302a43` 拉近，最後吸附到色盤裡的描邊色。不要用一整圈純黑。
-- **主角色盤鎖定**：主角（書騎士）固定 34 色，Harvey 2026-11-17 決定細修不准加色，`player_animation_test.gd` 會擋。新角色可以另開色盤；下面是我（agent）的建議，Harvey 尚未拍板：每個角色也控制在 34 色內，沿用同一套描邊做法。
+- **主角造型與色盤**：主角為黑色齊下巴短髮、深紫尖帽與寬袖法袍的法師。沿用 Harvey 的細修不加色原則，主角圖集的不透明色限於本版色盤，總數不超過 34。其他角色可另開色盤。
+- **臉型**：分開量露臉與頭髮。兩張參考的下巴約為眼頰寬的 75–80%，下緣短平，近眼比遠眼寬，瀏海只留一道窄額縫。原圖有混色，邊界容許約一個來源像素的誤差。[露臉與五官量測](reference/characters/cq_face_measurement.png)・[黑色短鮑伯參考](reference/characters/violet_mage_concept.png)
+- **戴帽與身體**：法師參考的左側帽簷壓在近側鬢髮前，下沿向右上揚約 13°，前額處有轉折。下巴緊接窄領，肩線斜落，腰比肩窄，翻起的袍尾撐開衣襬。法杖往身體外側伸出，杖頭與露臉寬度相近。以帽冠到衣襬為基準並排檢查。[法師比例參考](reference/characters/cq_mage_proportions.png)
 - **動畫**：圖集 6 欄 × 3 列。三列依序是正面、背面、側面，每列 2 格待機加 4 格走路；左側用鏡像。新角色沿用同一套排法，`player.gd` 的換格邏輯才能共用。
 - **產生方式**：照 A5，角色圖由 `tools/gen_character.gd` 這類產生器輸出，不手改 PNG。

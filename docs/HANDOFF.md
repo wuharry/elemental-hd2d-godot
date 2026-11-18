@@ -2,7 +2,36 @@
 
 規則看 [BLUEPRINT.md](BLUEPRINT.md)。這份記錄實際完成與驗證狀態；靜態截圖不能代替操作手感或手機實機測試。
 
-最後更新：2026-11-17 傍晚（第三輪：場景風格一致性的自動檢查、地下城與雪原重修、點光源陰影效能）
+最後更新：2026-11-18（第四輪：黑短髮法師、元素圖示與角色身邊的光點）
+
+## 第四輪角色與元素顯示（2026-11-18）
+
+Harvey 選定黑色齊瀏海短鮑伯、深紫法袍與大武器。前兩次稿件的臉、帽子與身體比例均未獲接受。本次先依使用者提供的遊戲圖量出露臉輪廓與帽簷、身軀的相對位置，再重建角色。原始生成稿只作髮型參考。[黑色短鮑伯](reference/characters/violet_mage_concept.png)
+
+| 拆解部位 | 素材讀值與重畫依據 |
+| --- | --- |
+| 露臉 | 白髮參考的眼頰寬約 20 個來源像素、頷底約 16；尖帽法師約 17 與 13。近眼較寬，額頭只從瀏海間露出窄縫，嘴寬而低。[原圖](reference/characters/cq_face_proportions.png)・[判讀圖](reference/characters/cq_face_measurement.png) |
+| 帽子 | 女巫左簷約在 (25, 61)，右端約在 (93, 45)，由左下往右上約 13°。中段壓住近側鬢髮，額側形成轉折，右端翻起露出帽底。[原圖](reference/characters/cq_mage_proportions.png) |
+| 身體 | 女巫下巴約 y70，領口 y71–74，肩袖 y75–79，衣襬在 y88 平止。圖中鞋形無法獨立量測。重畫時，緊接下巴的窄領、斜肩和袍尾各自保留可辨認的形狀。[帽子與身體判讀圖](reference/characters/cq_hat_body_measurement.png) |
+| 二頭身 | 原始需求明寫「2頭身像素腳色」。先前只對齊帽冠和衣襬，導致下巴到腳底只剩 11px，Harvey 指出身體太矮。最新畫稿改以去帽人偶的顱頂、下巴、腳底分別量兩段。[原始需求圖](reference/round1_brief.png) |
+
+<details>
+<summary>髮型參考的 ImageGen 提示詞</summary>
+
+One original full body playable chibi mage sprite, facing slightly right toward viewer. Use the three supplied images exclusively as haircut references: black chin-length inward-curving bob with clear blunt slightly parted bangs, both framing cheeks. Classic very wide deep violet pointed witch hat, bent tip, antique gold small diamond buckle and a wine ribbon, matching deep violet flared robe with large sleeves and worn boots, small old wood wand with amber tip. Make a charming, confident, deliberately super-deformed pixel-art RPG adventurer, 1.8 heads tall including a generous face, tiny compact body, stout, dot eyes, single pixels of blush. Chunky expressive intentional clusters you could really draw on a tiny 56x48 grid, limited rich palette, nearest-neighbour pixel grid. Single small character enlarged to fill the picture on transparent background. No UI, text, shadow, guides or scenery. Aim for the appeal and bold silhouettes of high-quality Crusaders Quest pixel characters but an original character design.
+
+</details>
+
+| 第四輪交付 | 驗證狀態 |
+| --- | --- |
+| 前兩版造型 | FAIL。Harvey 指出臉形、帽子與身體比例都未到位，兩版均已撤換。 |
+| 接手重畫後的遊戲圖集 | PASS（素材規格）。18 格、21 個不透明色，alpha 僅 0／255。正面眼頰 14px、頷底 11px（79%），近／遠眼寬 4／2px、眼距 9px。去帽顱頂 y14、下巴 y30、腳底 y46，按像素行中心量得頭長 16px、身長 16px。衣襬提高，靴底分成兩段。角色與動畫回歸共 37 項通過。[兩頭身實測圖](screenshots/iteration4_mage_body_check.png)・[角色對照，左為參考、右為遊戲圖集](screenshots/iteration4_mage_comparison.png) |
+| 元素鍵 | PASS。水滴、火焰、閃電與雪花四種像素圖示都有對應觸控回歸，HUD 共 19 項通過。 |
+| 環繞光點 | PASS。空佇列、重複元素、滿載、水火融合、移動跟隨、施放與清空共 12 項通過；取消瞄準保留光點另由 HUD 操作測試驗證。 |
+| 遊戲視窗 | PASS。實際檢視村莊晨／日／昏／夜、白天滿佇列及夜間施法，共 6 張。另以遊戲鏡頭錄下水火融合、補入其他元素與施放。[四元素 HUD](screenshots/iteration4_day_elements.png)・[環繞動畫](screenshots/iteration4_mage_orbit.webp) |
+| 手機與造型驗收 | NOT RUN。尚無 Android 實機幀時間或觸控手感量測。Harvey 對終版造型的主觀驗收待回饋。 |
+
+第四輪回歸合計 396 PASS、0 FAIL（19 邏輯、19 HUD、12 光點、37 角色、288 場景、15 網格、6 截圖腳本）。
 
 ## 0. 第三輪（2026-11-17 下午）
 
@@ -33,7 +62,7 @@
 
 - 接手時沒有 commit；主程式仍引用已刪除的 `VillageWorld`／`Layout`，無法啟動。已接上現有 `Scenes → SceneDef → GameWorld`，保留前一輪已寫的四場景與原始參考圖。
 - GitHub repo 名稱確定為 `elemental-hd2d-godot`，遠端為 `https://github.com/wuharry/elemental-hd2d-godot.git`。
-- Harvey 明確指出第一版人物不夠像 Crusaders Quest。重畫銀髮、羽飾、金邊短裝、紅披風與大型魔導書之後，Harvey 確認沿用此方向，**顏色不要再增加**。目前圖集使用固定 34 種不透明顏色，alpha 只有 0／255；後續細修不准擴充這套色盤。新增的兩張造型參考在 `docs/reference/characters/cq_*.png`。
+- 第二輪曾使用銀髮書騎士與 34 色色盤。第四輪依 Harvey 的新參考更換主角，現用黑短髮法師，後續細修仍限制色數。
 - 玩法「草案」「待定」維持原狀，本輪沒有決定護盾、副手、配方、傷害或多人規則。
 
 ## 2. 操作與畫面
@@ -49,9 +78,9 @@
 
 也可用 `godot --path . -- --scene=forest` 直接開指定場景。這些是場景與操作原型，不是已完成關卡。
 
-原始截圖仍保留在 [screenshots/](screenshots/)。本輪驗收圖用 `iteration2_` 前綴，角色放大圖為 `iteration2_character.png`。本輪產圖與效能紀錄在忽略提交的 `test_output/`。
+各輪場景驗收圖保留在 [screenshots/](screenshots/)。`iteration2_` 與 `iteration3_` 的場景截圖記錄當時版本。執行截圖工具會將新圖與日誌寫到 `test_output/`。
 
-## 3. 進度與驗證
+## 3. 第二、三輪進度與驗證
 
 | 區塊 | 實際完成範圍 | 驗證 |
 | --- | --- | --- |
@@ -89,7 +118,7 @@
 
 ## 5. 下一步
 
-1. Harvey 實玩新版角色與四場景，回饋比例、可讀性、走路動作和操作感。**固定 34 色盤，不增加顏色。** 第三輪的地下城、雪原與路燈光圈變化（第 0 節）也請一起看。
+1. Harvey 實玩黑短髮法師，確認一般鏡頭下的剪影、四方向動作與戰鬥時光點的可讀性。細修維持本版色盤。
 2. 做 Mobile renderer 降級，並在手機上量 frame time。draw call 已經壓到 800 以下，但這不代表手機跑得動；不得靠關掉有光燈具或陰影來達標。
 3. Android 實機與四時段截圖驗收；沒有裝置就寫 NOT RUN。
 4. 玩法草案由 Harvey 拍板後，才接敵人假人、傷害與環境互動；不要自己決定待定規則。
@@ -102,6 +131,7 @@ godot --headless --path . --editor --import --quit
 godot --headless --path . --script res://tests/run_tests.gd
 godot --headless --path . --script res://tests/hud_input_test.gd
 godot --headless --path . --script res://tests/player_animation_test.gd
+godot --headless --path . --script res://tests/element_orbit_test.gd
 godot --headless --path . --script res://tests/style_test.gd
 godot --headless --path . --script res://tests/mesh_batch_test.gd
 zsh tests/capture_test.sh
@@ -129,6 +159,7 @@ tools/capture.sh --nohud --pos=-13,3.1 --shots=day --tag=occlusion_off --no-reve
 | 所有場景的四時段光影 | `time_of_day.gd` 的 `PRESETS`（含 `scene_overrides`） |
 | 貼圖與角色 | `tools/gen_textures.gd`、`tools/gen_character.gd`；重跑後匯入 |
 | 角色動畫／瞄準 | `src/player/player.gd` |
+| 佇列光點與元素圖示 | `src/player/element_orbit.gd`、`tools/gen_element_icons.gd` |
 | 鏡頭／樹冠鏤空 | `camera_rig.gd`、`shaders/foliage_reveal.gdshaderinc` |
 | 網格合併 | `mesh_batcher.gd`、`mats.gd`、`batched_triplanar.gdshader`、`foliage_block.gdshader` |
 | 操作版面 | `src/ui/hud.gd` 的 `_layout()` |

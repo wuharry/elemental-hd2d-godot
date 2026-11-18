@@ -1,18 +1,18 @@
 extends CanvasLayer
-## 手機 HUD：左搖桿移動、右搖桿瞄準施放、四顆元素鍵、融合鍵、三個快捷槽、頭頂佇列。
+## 手機 HUD：左搖桿移動、右搖桿瞄準施放、四顆元素鍵、融合鍵、三個快捷槽。
 ## 全部用觸控事件（滑鼠會被模擬成觸控），所以可以多指同時按。
 ## 這裡只把操作轉成對 Player／ElementQueue 的呼叫，不放任何玩法規則。
 
 ## DRAFT：內圈佔搖桿半徑的比例，需要實機測試後才定（規則文件第 5 節）。
 const AIM_INNER_RATIO := 0.55
 const LONG_PRESS_SEC := 0.35
+const ELEMENT_ICONS: Texture2D = preload("res://assets/ui/element_icons.png")
 
 var _player: Player
 var _rig: CameraRig
 var _tod: TimeOfDay
 var _canvas: Control
 var _font: Font
-var _orb: Texture2D
 
 var _widgets: Array[Dictionary] = []
 ## touch index → widget
@@ -26,14 +26,16 @@ func setup(player: Player, rig: CameraRig, tod: TimeOfDay) -> void:
 	_rig = rig
 	_tod = tod
 	_font = ThemeDB.fallback_font
-	_orb = load("res://assets/characters/orb.png")
 	_canvas = Control.new()
 	_canvas.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_canvas.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_canvas.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_canvas.draw.connect(_draw_hud)
 	add_child(_canvas)
+	_player.queue.changed.connect(_canvas.queue_redraw.unbind(1))
+	_tod.changed.connect(_canvas.queue_redraw.unbind(1))
 	get_viewport().size_changed.connect(_layout)
+	set_process(false)
 	_layout()
 
 
@@ -59,12 +61,15 @@ func _layout() -> void:
 	# 驗收用：切換時段（正式版會拿掉）
 	for i in TimeOfDay.ORDER.size():
 		_widgets.append({"kind": "time", "c": Vector2(size.x - 60.0 - (3 - i) * 74.0, 58.0), "r": 30.0, "time": TimeOfDay.ORDER[i]})
+	_canvas.queue_redraw()
 
 
 func _process(delta: float) -> void:
-	if _toast_time > 0.0:
-		_toast_time -= delta
-	_canvas.queue_redraw()
+	_toast_time -= delta
+	if _toast_time <= 0.4:
+		_canvas.queue_redraw()
+	if _toast_time <= 0.0:
+		set_process(false)
 
 
 func _input(event: InputEvent) -> void:
@@ -87,6 +92,7 @@ func _press(index: int, pos: Vector2) -> void:
 			w["moved"] = false
 			_touches[index] = w
 			_drag(index, pos)
+			_canvas.queue_redraw()
 			get_viewport().set_input_as_handled()
 			return
 
@@ -100,6 +106,7 @@ func _drag(index: int, pos: Vector2) -> void:
 		if v.length() > 1.0:
 			v = v.normalized()
 		w["v"] = v
+		_canvas.queue_redraw()
 		if v.length() > 0.2:
 			w["moved"] = true
 		if w["kind"] == "move":
@@ -115,6 +122,7 @@ func _release(index: int, _pos: Vector2) -> void:
 		return
 	var w: Dictionary = _touches[index]
 	_touches.erase(index)
+	_canvas.queue_redraw()
 	var held := (Time.get_ticks_msec() - int(w["t0"])) / 1000.0
 	match w["kind"]:
 		"move":
@@ -154,6 +162,8 @@ func _to_world(v: Vector2) -> Vector3:
 func _say(text: String) -> void:
 	_toast = text
 	_toast_time = 1.8
+	set_process(true)
+	_canvas.queue_redraw()
 
 
 # ---------- 繪製 ----------
@@ -166,8 +176,7 @@ func _draw_hud() -> void:
 			"aim":
 				_draw_stick(w, AIM_INNER_RATIO)
 			"element":
-				var col: Color = Elements.color(w["element"])
-				_draw_button(w, col, Elements.display_name(w["element"]), 38)
+				_draw_element_button(w)
 			"fuse":
 				var ready := _player.queue.can_fuse()
 				_draw_button(w, Color("#c9a0ff") if ready else Color("#6a6078"), "融合", 30)
@@ -176,7 +185,6 @@ func _draw_hud() -> void:
 			"time":
 				var on: bool = _tod.current == w["time"]
 				_draw_button(w, Color("#ffd27a") if on else Color("#4a4a52"), TimeOfDay.LABELS[w["time"]], 24)
-	_draw_queue()
 	if _toast_time > 0.0:
 		var size := get_viewport().get_visible_rect().size
 		var a := clampf(_toast_time / 0.4, 0.0, 1.0)
@@ -199,34 +207,30 @@ func _draw_stick(w: Dictionary, inner_ratio: float) -> void:
 	_canvas.draw_arc(c + v * r, r * 0.36, 0, TAU, 32, Color(0.1, 0.1, 0.14, 0.7), 3.0, true)
 
 
-func _draw_button(w: Dictionary, col: Color, label: String, font_size: int) -> void:
+func _draw_button_face(w: Dictionary, col: Color) -> void:
 	var c: Vector2 = w["c"]
 	var r: float = w["r"]
 	var down := _touches.values().has(w)
 	_canvas.draw_circle(c, r, Color(0.07, 0.07, 0.1, 0.62))
 	_canvas.draw_circle(c, r - 7.0, col.darkened(0.25 if down else 0.45) * Color(1, 1, 1, 0.92))
 	_canvas.draw_arc(c, r - 3.0, 0, TAU, 40, col.lightened(0.2), 4.0, true)
+
+
+func _draw_element_button(w: Dictionary) -> void:
+	var element: int = w["element"]
+	_draw_button_face(w, Elements.color(element))
+	# 圖集一格對應一種基礎元素；以整數倍放大，貼齊畫布像素。
+	var tile := Vector2.ONE * ELEMENT_ICONS.get_height()
+	var size := tile * 4.0
+	var center: Vector2 = w["c"]
+	var dst := Rect2((center - size * 0.5).round(), size)
+	var src := Rect2(Vector2(element * tile.x, 0), tile)
+	_canvas.draw_texture_rect_region(ELEMENT_ICONS, dst, src)
+
+
+func _draw_button(w: Dictionary, col: Color, label: String, font_size: int) -> void:
+	_draw_button_face(w, col)
+	var c: Vector2 = w["c"]
 	var ts := _font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size)
 	_canvas.draw_string_outline(_font, c + Vector2(-ts.x * 0.5, ts.y * 0.32), label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 6, Color(0.08, 0.06, 0.1, 0.9))
 	_canvas.draw_string(_font, c + Vector2(-ts.x * 0.5, ts.y * 0.32), label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.WHITE)
-
-
-## 四格佇列畫在角色頭頂（跟著角色走），每格是放大 4 倍的像素光球。
-func _draw_queue() -> void:
-	var cam := _rig.camera
-	var head := _player.global_position + Vector3(0, 1.75, 0)
-	if cam.is_position_behind(head):
-		return
-	# unproject_position 回傳的已經是畫布座標（跟 HUD 同一套），不用再換算
-	var anchor := cam.unproject_position(head)
-	var slot := 36.0
-	var gap := 4.0
-	var total := ElementQueue.CAPACITY * slot + (ElementQueue.CAPACITY - 1) * gap
-	var origin := (anchor - Vector2(total * 0.5, slot + 6.0)).round()
-	for i in ElementQueue.CAPACITY:
-		var rect := Rect2(origin + Vector2(i * (slot + gap), 0), Vector2(slot, slot))
-		_canvas.draw_rect(rect, Color(0.09, 0.08, 0.12, 0.78))
-		_canvas.draw_rect(rect, Color(0.93, 0.86, 0.66, 0.9), false, 2.0)
-		if i < _player.queue.slots.size():
-			var e: int = _player.queue.slots[i]
-			_canvas.draw_texture_rect(_orb, rect.grow(-2.0), false, Elements.color(e))

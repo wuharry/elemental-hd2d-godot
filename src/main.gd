@@ -223,6 +223,15 @@ func _capture_all() -> void:
 	if not tag.is_empty():
 		get_tree().quit()
 		return
+	# 用實際佇列拍滿四元素的村景，方便在遊戲尺寸核對按鍵與環繞光點。
+	time_of_day.set_time("day", true)
+	for element in Elements.LOADOUT:
+		player.queue.add(element)
+	for i in CAPTURE_SETTLE_FRAMES:
+		await get_tree().process_frame
+	if not _save_capture("%s/shot_day_elements.png" % dir):
+		return
+	player.queue.clear()
 	# 最後多拍一張「夜晚施法中」：確認排元素 → 融合 → 施放這條路走得通，也看法術光照在場景上的樣子
 	time_of_day.set_time("night", true)
 	for i in CAPTURE_SETTLE_FRAMES:

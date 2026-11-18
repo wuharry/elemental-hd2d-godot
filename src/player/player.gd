@@ -8,7 +8,9 @@ signal cast(elements: Array[int], origin: Vector3, direction: Vector3)
 const SPEED := 5.2
 const PIXEL := 1.0 / 32.0
 const FRAME_SIZE := Vector2i(56, 48)
-const BODY_OFFSET_X := 4.5
+const BODY_OFFSET_X := 8.0
+# 琥珀晶中心約在 (6.5, 27.5)，正面兩腳的中心在 (36, 47)。
+const WAND_TIP := Vector3(-29.5 * PIXEL, 19.5 * PIXEL, 0.0)
 const ATLAS_COLUMNS := 6
 const ATLAS_ROWS := 3
 enum Facing { FRONT, BACK, SIDE }
@@ -53,20 +55,20 @@ func _ready() -> void:
 	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 	sprite.double_sided = true
 	sprite.centered = true
-	# 腳底對齊原點；寬圖格右側保留給誇張的武器，原點仍在身體中央。
-	sprite.offset = Vector2(BODY_OFFSET_X, FRAME_SIZE.y * 0.5 - 1.0)
-	# 角色放在第 2 層：法杖的光只照場景、不照角色自己，否則整張圖會被洗成青色
+	# 正面與右側身都為左邊的長杖留白，腳底仍對齊人物原點。
+	sprite.offset = Vector2(-BODY_OFFSET_X, FRAME_SIZE.y * 0.5 - 1.0)
+	# 角色放在第 2 層，讓杖光照亮她腳邊的地面。
 	sprite.layers = 2
 	add_child(sprite)
 
-	# 魔導書水晶的微光：讓角色在夜裡也有一圈自己的光
+	# 琥珀杖尖發出暖光。
 	staff_light = OmniLight3D.new()
-	staff_light.light_color = Color("#7ff3ff")
+	staff_light.light_color = Color("#ffb969")
 	staff_light.light_energy = 0.9
 	staff_light.light_cull_mask = 0xFFFFF & ~2
 	staff_light.omni_range = 3.2
 	staff_light.omni_attenuation = 1.6
-	staff_light.position = Vector3(0.3, 1.15, 0.25)
+	staff_light.position = WAND_TIP
 	add_child(staff_light)
 
 	# 只照角色的補光（第 2 層）：不管哪個時段，角色都要看得清楚
@@ -79,6 +81,7 @@ func _ready() -> void:
 	fill.light_specular = 0.0
 	fill.position = Vector3(0.6, 1.6, 2.0)
 	add_child(fill)
+	add_child(preload("res://src/player/element_orbit.gd").new(queue))
 
 
 func _physics_process(delta: float) -> void:
@@ -123,8 +126,12 @@ func _refresh_sprite() -> void:
 	elif screen_dir.z < 0.0:
 		facing = Facing.BACK
 	sprite.flip_h = facing == Facing.SIDE and screen_dir.x < 0.0
-	sprite.offset.x = -BODY_OFFSET_X if sprite.flip_h else BODY_OFFSET_X
-	staff_light.position = Vector3(-0.7 if sprite.flip_h else 0.7, 1.15, 0.0).rotated(Vector3.UP, camera_yaw)
+	var mirrored := facing == Facing.BACK or sprite.flip_h
+	sprite.offset.x = BODY_OFFSET_X if mirrored else -BODY_OFFSET_X
+	var tip := WAND_TIP
+	if mirrored:
+		tip.x = -tip.x
+	staff_light.position = tip.rotated(Vector3.UP, camera_yaw)
 	# 待機短暫眨眼；走路使用四張不同的手腳與衣襬姿勢。
 	var column := 1 if fmod(_animation_time, idle_period) > idle_period - 0.16 else 0
 	if _was_moving:

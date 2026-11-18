@@ -2,13 +2,13 @@ extends SceneTree
 ## 圖集及真實 CharacterBody3D 移動回歸；不以數學測試取代畫面驗收。
 ## godot --headless --path . --script res://tests/player_animation_test.gd
 
-## 2026-11-17 Harvey 接受的書騎士圖集：34 色（透明另計）。細修不可新增色彩。
+const MageArt := preload("res://tools/gen_character.gd")
+
+## 黑髮紫袍法師的固定色盤；透明另計。
 const APPROVED_COLORS := [
-	"#26243b", "#2e2e44", "#302a43", "#353a63", "#37354c", "#394958", "#3b2437", "#433f53",
-	"#443230", "#468eac", "#4a2c3b", "#4f4033", "#52454c", "#524b52", "#534b48", "#534f59",
-	"#58698e", "#5ba4b4", "#8085ae", "#819bad", "#89dfe4", "#913b55", "#b7b5cf", "#b97935",
-	"#cebea3", "#d85d63", "#e4e0dd", "#e6a389", "#edb941", "#ef9b99", "#f8cfb2", "#fbebc9",
-	"#ffeaa0", "#fff9e8",
+	"#211d29", "#231b2b", "#312137", "#352041", "#352d38", "#504452", "#51305e", "#571c3b",
+	"#57313c", "#593241", "#734485", "#796876", "#8a2947", "#8f5144", "#9c629e", "#bc3f53",
+	"#c8844e", "#db977f", "#ec6a67", "#ed812b", "#f4be6b", "#f5bca3", "#ffe2c6", "#fff2b7",
 ]
 
 var _passed := 0
@@ -56,7 +56,40 @@ func _check_atlas() -> void:
 				used[rgba] = true
 				within_palette = within_palette and approved.has(rgba)
 	_check(crisp, "圖集沒有半透明像素")
-	_check(within_palette, "只使用已驗收的34色色票，實際%d色" % used.size())
+	_check(within_palette and used.size() <= APPROVED_COLORS.size(), "圖集限定於紫袍法師色票，實際 %d 色" % used.size())
+	var idle := atlas.get_region(Rect2i(0, 0, 56, 48))
+	var amber_pixels := 0
+	for y in range(25, 41):
+		for x in range(1, 14):
+			if idle.get_pixel(x, y) == Color("#ed812b"):
+				amber_pixels += 1
+	_check(amber_pixels >= 5, "左側杖頭能辨識獨立的琥珀晶面")
+	# 髮頂藏在帽子裡；由同一產生器關掉帽層量髮頂，頷和腳底直接量遊戲圖集。
+	var unmasked := MageArt.draw_frame(0, 0, false)
+	var scalp_y := unmasked.get_used_rect().position.y
+	var sole_y := idle.get_used_rect().end.y - 1
+	var cheek := 0
+	var chin_y := -1
+	for y in range(scalp_y, sole_y):
+		var width := _skin_width(idle, y)
+		if width >= 10:
+			cheek = maxi(cheek, width)
+			chin_y = y
+		elif chin_y >= 0:
+			break # 條帶縮為頸部的第一行
+	var chin := _skin_width(idle, chin_y) if chin_y >= 0 else 0
+	_check(cheek >= 12 and chin >= cheek * 0.70 and chin <= cheek * 0.85, "下巴保留約四分之三臉頰寬")
+	_check(chin_y > scalp_y and absi((chin_y - scalp_y) - (sole_y - chin_y)) <= 1,
+		"不含帽的二頭身：髮頂 %d、下巴 %d、鞋底 %d" % [scalp_y, chin_y, sole_y])
+	var lowest_row := idle.get_region(Rect2i(0, sole_y, idle.get_width(), 1))
+	var runs := 0
+	var occupied := false
+	for x in lowest_row.get_width():
+		var solid := lowest_row.get_pixel(x, 0).a > 0.0
+		if solid and not occupied:
+			runs += 1
+		occupied = solid
+	_check(runs == 2, "站立可看見兩隻靴底與中間留白")
 	for row in 3:
 		var unique_frames: Array[PackedByteArray] = []
 		var unclipped := true
@@ -73,8 +106,20 @@ func _check_atlas() -> void:
 			var bounds := frame.get_used_rect()
 			feet_aligned = feet_aligned and bounds.end.y == 47
 		_check(unique_frames.size() == 6, "方向 %d 的六格姿勢各不相同" % row)
-		_check(unclipped, "方向 %d 沒有裁掉羽飾、魔導書或腳" % row)
+		_check(unclipped, "方向 %d 沒有裁掉帽尖、法杖或腳" % row)
 		_check(feet_aligned, "方向 %d 的每格腳底對齊地面" % row)
+
+
+func _skin_width(frame: Image, y: int) -> int:
+	var skin := [Color("#db977f"), Color("#f5bca3"), Color("#ffe2c6")]
+	var left := 46
+	var right := 28
+	# 排除耳朵，只在臉的範圍測左右兩側，像素中間可以是嘴與眼睛。
+	for x in range(29, 46):
+		if frame.get_pixel(x, y) in skin:
+			left = mini(left, x)
+			right = maxi(right, x)
+	return maxi(0, right - left + 1)
 
 
 func _run() -> void:
@@ -107,6 +152,10 @@ func _run() -> void:
 			"方向 %d 按鏡頭方向移動" % i)
 		_check(player.sprite.frame_coords.y == expected_rows[i]
 			and player.sprite.flip_h == (i == 3), "方向 %d 使用對應面向" % i)
+		var mirrored := i == 1 or i == 3
+		var wand_offset := player.staff_light.position.rotated(Vector3.UP, -player.camera_yaw).x
+		_check((player.sprite.offset.x > 0.0) == mirrored and (wand_offset > 0.0) == mirrored,
+			"方向 %d 的腳底與杖光跟隨圖格鏡像" % i)
 	var columns: Array[int] = []
 	for i in 40:
 		await _ticks(1)

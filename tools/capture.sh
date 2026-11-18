@@ -75,7 +75,7 @@ expected=()
 for shot in "${shots[@]}"; do
   expected+=("test_output/shot_${shot}${suffix}.png")
 done
-[[ -n "$tag" ]] || expected+=(test_output/shot_night_cast.png)
+[[ -n "$tag" ]] || expected+=(test_output/shot_day_elements.png test_output/shot_night_cast.png)
 for output in "${expected[@]}"; do
   if [[ ! -s "$output" || ! "$output" -nt "$marker" ]]; then
     print -u2 "Missing fresh capture: $output"

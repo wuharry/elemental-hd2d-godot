@@ -112,6 +112,10 @@ func _run() -> void:
 	await _frames(3)
 	_check(_casts == 1, "拉回內圈放開不應施放")
 	_check(player.queue.slots == [Elements.Type.LIGHTNING], "取消後佇列保留，實際 %s" % [player.queue.slots])
+	var carried_motes := player.get_node("ElementOrbit").get_children().filter(
+		func(dot: Sprite3D) -> bool: return dot.visible)
+	_check(carried_motes.size() == 1 and carried_motes[0].modulate.is_equal_approx(Elements.color(Elements.Type.LIGHTNING)),
+		"取消後雷光點仍繞在角色身旁")
 
 	# 5. 佇列上限四格
 	for i in 5:
@@ -170,6 +174,12 @@ func _run() -> void:
 	await _frames(3)
 	_check(player.move_input == Vector2.ZERO and player.aim_input == Vector2.ZERO,
 		"視窗改變尺寸後釋放舊搖桿狀態")
+
+	# 改用圖示後，四個觸控位置仍要對到各自的元素，包括冰。
+	player.queue.clear()
+	for i in Elements.LOADOUT.size():
+		await _tap(_widget(hud, "element", i)["c"])
+	_check(player.queue.slots == Elements.LOADOUT, "逐一點四顆圖示 → 依序排入水、火、雷、冰")
 
 	print("%d passed, %d failed" % [_passed, _failed])
 	quit(1 if _failed > 0 else 0)
