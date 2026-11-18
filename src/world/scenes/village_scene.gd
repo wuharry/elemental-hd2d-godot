@@ -38,7 +38,7 @@ func _init() -> void:
 		{"c": Vector2(10.8, 3.4), "r": 1.5},
 	]
 	houses = [
-		# 比例是 Q 版世界：一層樓約 1.6 公尺，門高 1.5 公尺（角色約 1.4 公尺）
+		# Q 版建築每層約 1.6 公尺，門高 1.5 公尺。
 		{"pos": Vector2(-10.5, -7.2), "rot": 6.0, "w": 4.6, "d": 3.8, "base_h": 1.7, "wall_h": 1.6, "roof_h": 1.9, "gable_front": false, "cols": 2, "floors": 1, "roof_tint": ROOF_BROWN, "seed": 1},
 		{"pos": Vector2(-3.0, -7.8), "rot": 0.0, "w": 5.4, "d": 4.6, "base_h": 1.8, "wall_h": 3.2, "roof_h": 2.6, "gable_front": true, "cols": 3, "floors": 2, "roof_tint": ROOF_DARK, "seed": 2},
 		{"pos": Vector2(4.6, -7.4), "rot": -4.0, "w": 4.8, "d": 4.0, "base_h": 1.8, "wall_h": 1.7, "roof_h": 2.3, "gable_front": true, "cols": 2, "floors": 1, "roof_tint": ROOF_SLATE, "seed": 3},

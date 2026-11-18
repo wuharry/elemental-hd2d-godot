@@ -11,212 +11,217 @@ const ROWS := 3
 # 墨色、黑髮、紫布、酒紅帽帶、皮革與金屬、膚色、琥珀。
 const PALETTE := {
 	"k": Color("#231b2b"), "i": Color("#312137"), "h": Color("#211d29"),
-	"j": Color("#352d38"), "u": Color("#504452"), "w": Color("#796876"),
+	"j": Color("#352d38"), "u": Color("#504452"),
 	"a": Color("#352041"), "v": Color("#51305e"), "p": Color("#734485"),
-	"l": Color("#9c629e"),
 	"r": Color("#571c3b"), "s": Color("#8a2947"), "t": Color("#bc3f53"),
-	"c": Color("#ec6a67"), "d": Color("#593241"), "b": Color("#8f5144"),
+	"d": Color("#593241"), "b": Color("#8f5144"),
 	"g": Color("#c8844e"), "y": Color("#f4be6b"),
 	"e": Color("#57313c"), "x": Color("#db977f"), "f": Color("#f5bca3"),
 	"n": Color("#ffe2c6"), "o": Color("#ed812b"), "m": Color("#fff2b7"),
 }
 
+# 輪廓取自 B 草稿，以約 25 個原稿像素對一格，收進主角原有色票。
+# 臉與去帽頭形分開於帽簷，手指遮在杖柄前方，雙腳可交替抬起。
 const HAT := [
-	".................iiii",
-	"...............ivpppva",
-	".............iivvvvpppai",
-	"...........iavvvappavpppai",
-	"..........ivvvviavppaavvppai",
-	".........ivaaiivppvaaaavvvvpai",
-	"........iaai..ivpvaaaaaavvvvvai",
-	"........iii..iivvvaaaaaavvvvvvvi",
-	"........ssrr..iivvattttsssgygbrrrva.........i",
-	"........rsssrriavttttssrrbgmogrrrrrai.....ipi",
-	".........rssssrttttsrrrrrrbossrrrrraai..iappi",
-	"...........stttrrsrrraaaaaarbrrrrrraaiiapppi",
-	"..........ttttrrrraaavvpvvvvaarrraaaaipppuui",
-	"........rttttrrrraavvpppppvvvvaaaaaiiaaauui",
-	".......rrrrrrrrraaaiiaaaaivvvvviiiiaauuui",
-	"..........irrraaiippaavvvviiiiiaaauuuii",
-	".........viraaiippaavvvv..iiiaaaiiiii",
-	"........viiiiippaavvvv......ii",
-	".......vviiipppavvvv",
-	"....ipppvvpppavvvv",
-	"iipppppppppavvvv",
-	".ivvppppavvvvv",
-	".iivvvvvvvvv",
-	"..iiiiiiii",
+	"........iiiii",
+	".......pppppppi",
+	"......ipvvvppppi",
+	"......ivvvvvvppppi",
+	".....ipvvvvvvvpppppi",
+	".....ivvvvvivvvvppppi",
+	"....ivviiiiivvvppvvvv",
+	"....ivi..iivvvppvvvvvvi",
+	"....ii....ivvvpvvvvvvvvi",
+	"..........ivvvvvvvvvvvvvi",
+	"..........ivvvvvmyvvkssssk",
+	".........ivvvvvmyyytssssssk..iiiii",
+	"........kkkvvvyyrkmysskhvvpppppppppppi",
+	".......kttssksrykkyrhkvvvpppppiiiiiippi",
+	"......ksssssssrsyyrvvvvvpppiiiiaaaaaaipi",
+	"......kssrrkkbskkkvvvppppiiiiiaaaaaaaai",
+	"......ksrrrskkvvvvvppp.....iiiaaaaaaaai",
+	".......kkkssvvvvvppp........iaaaaaaaa",
+	".....ktsssskvvvvpp...........aaaaaaai",
+	".....stskssvvppp.............aaaaaai",
+	".....ssksssppp................aaaai",
+	".....skksss...................aaai",
+	"..ippavkkks...................ai",
+	".iipppi.......................i",
+	".ipppi",
+	"ipvvvi",
+	"ivvvii",
+	"iivvii",
+	"..iii",
 ]
 
-const FACE := [
-	"................hhhh",
-	".........hhhhhhhhhhhjjjjhh",
-	"......hhhhhhjjhjjhhjjuujjjhh",
-	"....hhhhhhjjjjhhuuuhuujjjjjjh",
-	"....hhhhjjjjuuuuuuhuujjjjjjjj",
-	"...hhhhjujjuuuuuhhjjjxjjjjjjjh",
-	"...hhhjuujuuujhhhjjjxfnhjjjjjj",
-	"..hhhjuujuuuhhhhjjjxnnjjjjjjjj",
-	"..hhjjuujjuhhhhjjjxnnhjjjujjjjh",
-	".hhjjuuujhhhhhjxfjjjxhjjjjfxjjh",
-	".hhjuuuxhhhhhnkeeefnfnnnkefjhjj",
-	"hhjjjjjxxnhhhfnkesfnnnfksnfjhjj",
-	".hjjjjjxfnhhhxftssfnnnftsffujjj",
-	".jjjjjjuffujhxxfnnnnnfxnnnxjjjh",
-	".hhjuujjxjjujhfnnnnrssfnnfjjhjh",
-	"hhhjhjjhujhjjhxfnnnnnnnfnfjhjh",
-	"hh.hhjhuuuuhjhjxxfffffffxxjjh",
-	"..hhhhhjjuuhhhhhhhh....hhhh",
-	"..hhh.hjjhhhhhh",
-	"......hh...hh",
+const FRONT_HEAD := [
+	"........hhhhjjjjjhjjh",
+	".....hhhhjjjjhhhjjhjuh",
+	"...hhhhhhhhhhhjjjuhjuuh",
+	".hhhhhhhhhhhjhjjuuhjjuh",
+	"hhhhhhhhhhhjhhujuuhhjuuh",
+	"hhhhhhhhhhjjhhjjjjhhjjjh",
+	"hhhhhhhjjjjjnhjhjjhhjjjh",
+	"hhhhhhjjjjjnnjjhjjhnjhjh",
+	"hhhjjhjjjhhhhhnjjhnnjhjh",
+	"hjjjhhhjjhhnhhnhnnnhhhjh",
+	"hjhjnnhhjhnnrrnnnnrhhjh",
+	"hjhjnxhhjhnnrrnnnnrhjjj",
+	"hjhjhnhhjjnnssnnnnshjhj",
+	".jhjhhhjhjxfnnnnnnxhjhj",
+	".hhhjhhjjhhfnnnnnnxhjhh",
+	"...hjjhhhjhhhhhhhhhjhh",
+	".....h..hh.........h",
 ]
 
-const BACK_HAIR := [
-	"...............hhhh",
-	"...........hhhjjjjhhhh",
-	"........hhhhjjjuujjjjhh",
-	"......hhhhjjuuuuuujjjjhhh",
-	".....hhhjjuuuuuuujjjjjujjh",
-	"...hhhhjjuuuuuujjjjjuuuujjh",
-	"..hhhhjjuuuuujjjjjjjuuuujjh",
-	"..hhjjuuuuuujjjjjjjjuuujjjj",
-	".hhjjuuuuuuujjjjjjjjuujjjjjh",
-	".hhjuuujuuujjjjjjjjjuuhjjjjh",
-	"hhjjjjjuuujjjjjjjjjjuhhjjjjh",
-	"hhjjjjjujjjjjjjjjjjjhhhjjjjh",
-	".jjjjjjjjjjjjjhjjjjjhhjjjjhh",
-	".jjhhjjjjjjjjhhjjjjhhhjjjjhh",
-	".hhhhjjhhjjjjhhjjjjhhjjjjhh",
-	".hhhhhhhjjjjhhhjjjhhhjjjhhh",
-	"hh.hhhhhjjhhhhjjjhhhhhjhhh",
-	"...hh.hhh.hhhhjjhhhhhhh",
-	".......h..hh....hh..hh",
+const BACK_HEAD := [
+	"........hhhhhhhhhhhh",
+	".....hhhhjjjjjjjuujjhh",
+	"...hhhhjjjjjjjuuuujjjhh",
+	"..hhhjjjjjjuuuuujuujjjh",
+	".hhhjjuujuuuuujjjjujjjjh",
+	"hhhjjjuuuuuujjjjjjujjjjh",
+	"hhhjjuuujjjjjjjjhjuujjjh",
+	"hhjjjuujjjjjjjjjjhjujjjh",
+	"hhjjjujjjjjjjhjjjhjjjjjh",
+	"hhjjjjjjjjjjjhjjjhhjjjjh",
+	"hhjjjhjjjjjjhhjjjhhjjjjh",
+	"hhjjjhjjjjjjhhjjjjhhjjjh",
+	".hjjjhhjjjjjhhjjjjhhjjjh",
+	".hhjjhhjjjjhhhhjjjhhhjjh",
+	"..hhjjhhjjjhhhjjjjhhjhh",
+	"...hhjjhhjhhhhjjjhhhhh",
+	".....hhhhhh..hhh...hh",
 ]
 
-const PROFILE := [
-	".................hhh",
-	"...............hhhh",
-	"...........hhhjjjjhhhh",
-	"........hhhhjjjuujjjjjh",
-	"......hhhhjjuuuuuujjjjjjj",
-	".....hhhjjuuuuuujjjjjjjjjj",
-	"...hhhhjjuuuuujjjjjjjjjjjjj",
-	"..hhhhjjuuuuujjjjjhhjjjjjjjj",
-	"..hhjjuuuuuujjjjhhhhjxfxxjjj",
-	".hhjjuuuuuuujjjjhhhjfnnffjjj",
-	".hhjuuujuuujjjxhhhjnnnnnnfjj",
-	"hhjjjjjuuujjjxfhhhjnnkkeefjh",
-	"hhjjjjjujjjjjxhhhjxnnksffnjh",
-	".jjjjjjjjjjjjjhhhxnnfsnnnfxh",
-	".jjhhjjjjjjjjhhhhjfnnnnsstth",
-	".hhhhjjhhjjjjhhhhhjffnnnnfx",
-	".hhhhhhhjjjjhhhhhjjjxfffffh",
-	"hh.hhhhhjjhhhhjjjjjjjjjhhh",
-	"...hh.hhh.hhhhjjhhhhhhh",
-	".......h..hh....hh..hh",
+const SIDE_HEAD := [
+	"........hhhhhhhhhhhh",
+	".....hhhhjjjjjjjuujjhh",
+	"...hhhhjjjjjjjuuuujjjhh",
+	"..hhhjjjjjjuuuuujjujjjh",
+	".hhhjjjjjjuuujjjhjjujjjh",
+	"hhhhjjjjjuuujjjjhjjjjujh",
+	"hhhjjjjjuujjjjjhhjjjjjjh",
+	"hhhjjuujjjjjjjhhjjjjnjhh",
+	"hhhjjujjjjjhjjhhjjjnnhh",
+	"hhjjjjjjhjjhhjhhjjnnnhh",
+	"hhjjjjjhjjjhnnhhjnnhhrh",
+	"hhjjjjhhjjjhnxhhjnnnrrn",
+	".hjjjjhhjjjhhnhhjnfnrrnn",
+	".hhjjjhhjjjjhhhhjnnnnnnh",
+	"..hhjjhhhjjjhhhhjhfnnnx",
+	"...hhjjhhjjhhhjhhhhhxh",
+	".....hhh.hhhh..hh",
 ]
 
-const ROBE_FRONT := [
-	"...............dxxd",
-	"..............rdnnxb",
-	"...........avppryyyra",
-	".........avvpppvrgsvvva",
-	".........avppvabgvsvppva",
-	"..........avvaavsfrvvva",
-	"...........abgbbgymygb",
-	"............avvgbdgava",
-	"...........avpvva.rvpva",
-	"........rsavppvaia.vvpa",
-	"......rstvvppvbgaarvvpg",
-	"....rsttpgyyggb..abgyyb",
-	"..rsttsrr",
-	"rrssttr",
-	"..rrr",
+const FRONT_ROBE := [
+	".....avvymha",
+	"...vvvvvkykvva",
+	"..vyyhkskshyya",
+	"..pvhhtsvssavh",
+	"..pvvvhtkhshvv",
+	"..vvpaavyvvaav",
+	"..vvpavyayavvv",
+	"hyyyygggyggyyh",
+	".hhh..hhh..hh",
 ]
 
-const ROBE_BACK := [
-	".........ivppaa",
-	"........apppppva",
-	"......avppppppvvva",
-	".....avppppvvaavvva",
-	"......vppvvavvaavva",
-	".......avaavvaavvva",
-	".......abgggggbbba",
-	"........avapavvaa",
-	".......avppvavvvva",
-	"......avppvaivappva",
-	".....avppvvaaiavpvvr",
-	"....abgyggba.ibgygbrss",
-	"...................rsstr",
-	".....................rssr",
+const BACK_ROBE := [
+	".....ahvvva",
+	"...avppvvvva",
+	"..vvvppppvvvva",
+	"..vppvvvvvppva",
+	"..vvvaaaaavvva",
+	"..vvvvavavvvva",
+	"..vvvavvavvvva",
+	".ayyyvvvavvyyya",
+	"..hhyyyyyyyhhh",
 ]
 
-const ROBE_SIDE := [
-	".............ddxff",
-	"............ipgfnxb",
-	"..........avpppryga",
-	".........avpppvvvrba",
-	".........avppvaaavsa",
-	".........avpvvvrrvva",
-	"..........bgggyygbb",
-	"...........avaaabva",
-	"..........avppairava",
-	"........avppviavrvva",
-	".....rsavppvvviavrva",
-	"..rstspgygba..vvgygb",
-	"rrssrr",
-	"..rr",
-]
-
-const HAND := [
-	".....vpp",
-	"....avppv",
-	"..xbgppvv",
-	".xnfgyvva",
-	"..xffbbv",
-	".....bba",
-]
-
-const FAR_HAND := [
-	"..avv",
-	"..vpva",
-	".avpva",
-	".avppg",
-	"..agbf",
-	"..bxff",
-	"...xx",
-]
-
-const BOOT := [
-	".xf",
-	".xf",
-	".bg",
-	"bgd",
-	"bdd",
-	"ddd",
+const SIDE_ROBE := [
+	"......avyya",
+	"....vppvvygga",
+	"...vvppavvhsv",
+	"...vvvaavvvss",
+	"...vvvaavvvvha",
+	"...vvvavvvvyva",
+	"..avvvaavvvyva",
+	"..ayyvvvyyvyya",
+	"...hyyyyyyyhh",
 ]
 
 const STAFF := [
-	".d",
-	".gg",
-	".gmy",
-	".gmyy",
-	".byyoo",
-	".booyoo",
-	".dyoooyg",
-	"gybooooyb",
-	".ggbtooorb...g",
-	".byggbssrbd..yg",
-	"..gyygdrrddbgyb",
-	"...bgyggbbgyygbbb",
-	".....bgyyygbbbygbggbbb",
-	".....idbgbybogdbb..bbbggbgggbbb",
-	"....irb...bbgb......bbgb..bbb",
-	"...irs.....bb",
-	"..irs",
-	"..ir",
+	"....d",
+	"....myd",
+	"...dmyyd",
+	"...dym.d",
+	"...ddmy",
+	"....dmyy.d",
+	"..y.ymoy..md",
+	"..m.ymoo..ym",
+	".dm.yooog..gy",
+	".yy.yooog..gy",
+	"dmy..oggg.yd",
+	"dgyy..dd.yyd",
+	"..dyygymmyy",
+	"....dgoygd",
+	".....dgyy",
+	".......dyk",
+	"......kyyk",
+	".......kbk",
+	"........yyk",
+	"........kbk",
+	".........bb",
+	".........kbk",
+	"..........bk",
+	"..........bb",
+	"..........kb",
+	"...........bk",
+	"...........bb",
+	"...........kb",
+	"............bk",
+	"............bk",
+	"............bb",
+	"............kb",
+	"............kbk",
+	".............bk",
+	".............bb",
+	".............kb",
+	".............kb",
+	".............kb",
+	"..............bk",
 ]
 
+const GRIP := [
+	"....hhvv",
+	"knxkyvva",
+	"knnkyav",
+	"kfxkyvv",
+	"...kyyv",
+	"....hha",
+]
+
+const FAR_SLEEVE := [
+	"avv",
+	"vpva",
+	"vpya",
+	"hynn",
+	".fn",
+]
+
+const BOOT := [
+	".fn",
+	"bgy",
+	"bdg",
+	"dddb",
+]
+
+const BACK_BOOT := [
+	".dx",
+	"dbb",
+	"dbd",
+	"dddb",
+]
 
 func _init() -> void:
 	for directory: String in [OUT, "res://test_output"]:
@@ -255,31 +260,6 @@ func _init() -> void:
 	quit()
 
 
-# Dark paint already forms the contour of the bob and the hat's underside.
-# Rim the exposed bright clusters on skin, cloth, leather, and the crystal.
-static func _rim(img: Image) -> void:
-	var outlines := [PALETTE.i, PALETTE.a, PALETTE.d, PALETTE.b]
-	var source: Image = img.duplicate()
-	for y in range(1, H - 1):
-		for x in range(1, W - 1):
-			if source.get_pixel(x, y).a > 0:
-				continue
-			for step: Vector2i in [Vector2i.UP, Vector2i.LEFT, Vector2i.RIGHT, Vector2i.DOWN]:
-				var col := source.get_pixelv(Vector2i(x, y) + step)
-				if col.a == 0 or col.v < 0.34:
-					continue
-				var target: Color = col.darkened(0.42).lerp(PALETTE.i, 0.4)
-				var closest: Color = outlines[0]
-				var best := INF
-				for candidate: Color in outlines:
-					var rgb := Vector3(target.r - candidate.r, target.g - candidate.g, target.b - candidate.b)
-					if rgb.length_squared() < best:
-						best = rgb.length_squared()
-						closest = candidate
-				img.set_pixel(x, y, closest)
-				break
-
-
 static func _stamp(img: Image, rows: Array, origin: Vector2i, mirrored: bool) -> void:
 	for y in rows.size():
 		var row: String = rows[y]
@@ -293,30 +273,37 @@ static func _stamp(img: Image, rows: Array, origin: Vector2i, mirrored: bool) ->
 			img.set_pixel(px, origin.y + y, PALETTE[symbol])
 
 
-## 去掉帽子的視圖沿用同一個人物，用來量髮頂、下巴、腳底。
+# 眼睫位在輪廓內，閉眼不改臉頰邊界。
 static func draw_frame(facing: int, pose: int, wearing_hat := true) -> Image:
 	var img := Image.create_empty(W, H, false, Image.FORMAT_RGBA8)
 	var back := facing == 1
-	var stride: int = [0, 0, -2, -1, 2, 1][pose]
+	var side := facing == 2
 	var bob: int = [0, 0, 0, -1, 0, -1][pose]
-	var swing: int = [0, 0, 1, 1, -1, -1][pose]
-	_stamp(img, BOOT, Vector2i(31 + stride, 39 if pose == 3 else 41), back)
-	_stamp(img, BOOT, Vector2i(38 - stride, 39 if pose == 5 else 41), back)
-	var robe: Array = [ROBE_FRONT, ROBE_BACK, ROBE_SIDE][facing]
-	var hem_x: int = [20, 25, 21][facing]
-	_stamp(img, robe, Vector2i(hem_x + (1 if pose == 4 else 0), 30 + bob), back)
-	_stamp(img, FAR_HAND, Vector2i(38 + swing, 32 + bob), back)
-	_stamp(img, STAFF, Vector2i(1, 22 + swing + bob), back)
-	_stamp(img, HAND, Vector2i(27, 32 + swing + bob), back)
-	var head: Array = [FACE, BACK_HAIR, PROFILE][facing]
-	var head_x: int = [17, 18, 18][facing]
-	_stamp(img, head, Vector2i(head_x, 14 + bob + (1 if back and pose == 1 else 0)), back)
-	if pose == 1 and facing == 0:
-		_stamp(img, ["ffff", "eeee", "fxff"], Vector2i(31, 24), back)
-		_stamp(img, ["ff", "ee", "fx"], Vector2i(41, 24), back)
-	elif pose == 1 and facing == 2:
-		_stamp(img, ["fff", "eee", "ffx"], Vector2i(39, 25), back)
+	var stride: int = [0, 0, -1, -1, 1, 1][pose]
+	var far_foot := Vector2i(27 + stride, 43 - int(pose == 3))
+	var near_foot := Vector2i(32 - stride, 43 - int(pose == 5))
+	var boot: Array = BACK_BOOT if back else BOOT
+	_stamp(img, boot, far_foot, back)
+	_stamp(img, boot, near_foot, back)
+	var swing: int = [0, 0, 1, 0, -1, 0][pose]
+	_stamp(img, FAR_SLEEVE, Vector2i(35 + swing - int(side), 39 + bob), back)
+	var robe: Array = [FRONT_ROBE, BACK_ROBE, SIDE_ROBE][facing]
+	_stamp(img, robe, Vector2i(24, 35 + bob), back)
+	var head: Array = [FRONT_HEAD, BACK_HEAD, SIDE_HEAD][facing]
+	var head_y := 19 + bob + int(back and pose == 1)
+	_stamp(img, head, Vector2i(20, head_y), back)
+	if pose == 1 and not back:
+		if side:
+			_stamp(img, ["nnn", "err", "nnn"], Vector2i(39, 29 + bob), back)
+		else:
+			_stamp(img, ["nn", "er", "nn"], Vector2i(32, 29 + bob), back)
+			_stamp(img, ["n", "r", "n"], Vector2i(38, 29 + bob), back)
 	if wearing_hat:
-		_stamp(img, HAT, Vector2i(9, 3 + bob), back)
-	_rim(img)
+		_stamp(img, HAT, Vector2i(14, 3 + bob), back)
+		if back:
+			# 背面帽帶繞過帽冠，金扣只在正側面出現。
+			_stamp(img, ["...v", "..vvs", ".svvss", "ssssss", "ssssss", ".rrr"],
+				Vector2i(27, 13 + bob), true)
+	_stamp(img, STAFF, Vector2i(8, 7 + bob), back)
+	_stamp(img, GRIP, Vector2i(19, 36 + bob), back)
 	return img

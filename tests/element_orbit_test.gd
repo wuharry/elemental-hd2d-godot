@@ -67,6 +67,9 @@ func _run() -> void:
 			"重複冰各有一顆，超過四格不再增加")
 	var dots := _visible_motes(orbit)
 	_check(_evenly_spaced(dots), "四顆光點均分軌道")
+	var relative := player.to_local(dots[0].global_position)
+	_check(is_equal_approx(Vector2(relative.x, relative.z).length(), 0.94 * 1.2)
+		and is_equal_approx(relative.y, 0.72 * 1.2), "光點環繞放大後的角色，軌道半徑與高度同步")
 	var before := dots[0].position
 	orbit.call("_process", 0.1)
 	_check(not dots[0].position.is_equal_approx(before), "元素會沿軌道移動")

@@ -6,11 +6,15 @@ extends CharacterBody3D
 signal cast(elements: Array[int], origin: Vector3, direction: Vector3)
 
 const SPEED := 5.2
-const PIXEL := 1.0 / 32.0
+# B 版在世界中的顯示倍率。圖集與杖光共用同一個像素到公尺的換算。
+const VISUAL_SCALE := 1.2
+const PIXEL := VISUAL_SCALE / 32.0
 const FRAME_SIZE := Vector2i(56, 48)
-const BODY_OFFSET_X := 8.0
-# 琥珀晶中心約在 (6.5, 27.5)，正面兩腳的中心在 (36, 47)。
-const WAND_TIP := Vector3(-29.5 * PIXEL, 19.5 * PIXEL, 0.0)
+# 正面待機格的原生像素座標，以左上角為原點。
+const FEET := Vector2(31.5, 47.0)
+const CRYSTAL := Vector2(14.5, 15.5)
+const BODY_OFFSET_X := FEET.x - FRAME_SIZE.x * 0.5
+const WAND_TIP := Vector3(CRYSTAL.x - FEET.x, FEET.y - CRYSTAL.y, 0.0) * PIXEL
 const ATLAS_COLUMNS := 6
 const ATLAS_ROWS := 3
 enum Facing { FRONT, BACK, SIDE }
@@ -56,7 +60,7 @@ func _ready() -> void:
 	sprite.double_sided = true
 	sprite.centered = true
 	# 正面與右側身都為左邊的長杖留白，腳底仍對齊人物原點。
-	sprite.offset = Vector2(-BODY_OFFSET_X, FRAME_SIZE.y * 0.5 - 1.0)
+	sprite.offset = Vector2(-BODY_OFFSET_X, FEET.y - FRAME_SIZE.y * 0.5)
 	# 角色放在第 2 層，讓杖光照亮她腳邊的地面。
 	sprite.layers = 2
 	add_child(sprite)
@@ -81,7 +85,9 @@ func _ready() -> void:
 	fill.light_specular = 0.0
 	fill.position = Vector3(0.6, 1.6, 2.0)
 	add_child(fill)
-	add_child(preload("res://src/player/element_orbit.gd").new(queue))
+	var orbit := preload("res://src/player/element_orbit.gd").new(queue)
+	orbit.scale = Vector3.ONE * VISUAL_SCALE
+	add_child(orbit)
 
 
 func _physics_process(delta: float) -> void:
@@ -128,15 +134,17 @@ func _refresh_sprite() -> void:
 	sprite.flip_h = facing == Facing.SIDE and screen_dir.x < 0.0
 	var mirrored := facing == Facing.BACK or sprite.flip_h
 	sprite.offset.x = BODY_OFFSET_X if mirrored else -BODY_OFFSET_X
-	var tip := WAND_TIP
-	if mirrored:
-		tip.x = -tip.x
-	staff_light.position = tip.rotated(Vector3.UP, camera_yaw)
 	# 待機短暫眨眼；走路使用四張不同的手腳與衣襬姿勢。
 	var column := 1 if fmod(_animation_time, idle_period) > idle_period - 0.16 else 0
 	if _was_moving:
 		column = 2 + int(_animation_time * walk_fps) % 4
 	sprite.frame_coords = Vector2i(column, facing)
+	var tip := WAND_TIP
+	if mirrored:
+		tip.x = -tip.x
+	if column == 3 or column == 5:
+		tip.y += PIXEL # 這兩格的手與法杖一起上提一個像素。
+	staff_light.position = tip.rotated(Vector3.UP, camera_yaw)
 
 
 ## 把目前佇列放出去（清空佇列）。direction 是水平世界方向。

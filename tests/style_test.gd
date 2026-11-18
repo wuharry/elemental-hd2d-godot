@@ -64,7 +64,7 @@ func _assembly_checks() -> void:
 	for i in 3:
 		await physics_frame
 	var player: Player = main.get("player")
-	_check(is_equal_approx(player.sprite.pixel_size, 1.0 / 32.0), "character uses 32px/m")
+	_check(is_equal_approx(player.sprite.pixel_size, 1.2 / PX_PER_M), "B mage displays at 120% of world pixel size")
 	_check(player.sprite.texture_filter == BaseMaterial3D.TEXTURE_FILTER_NEAREST, "character nearest filter")
 	_check(player.sprite.alpha_cut == SpriteBase3D.ALPHA_CUT_DISCARD, "character writes cutout depth")
 	_check(player.sprite.shaded, "character receives scene lighting")
