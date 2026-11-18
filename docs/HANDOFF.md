@@ -2,7 +2,33 @@
 
 規則看 [BLUEPRINT.md](BLUEPRINT.md)。這份記錄實際完成與驗證狀態；靜態截圖不能代替操作手感或手機實機測試。
 
-最後更新：2026-11-18（第四輪：黑短髮法師、元素圖示與角色身邊的光點）
+最後更新：2026-11-18（B「極致 Q 版」定為主角造型，調整村莊中的人物大小）
+
+## B 版角色與建築比例（2026-11-18）
+
+Harvey 確認 B 版造型，要求人物相對建築再大一點。以角色腳底為基準將遊戲中的法師等比例放大 20%，待機從帽頂到鞋底由 1.375 m 增為 1.65 m。角色圖格仍是 56×48，維持 B 的臉型、頭身比與 21 色；建築尺寸及遊戲鏡頭沿用原值。
+
+| 交付 | 驗證狀態 |
+| --- | --- |
+| 角色與門窗的相對尺寸 | PASS。用同一個村莊站位、鏡頭與裁切位置並排檢視白天截圖，兩版腳底、門窗位置對齊。[放大前後對照](screenshots/mage_b_village_scale.png) |
+| 遊戲畫面與回歸 | PASS。實際看過四時段、滿佇列、夜間施法共六張截圖。角色 45、光點 13、HUD 19、場景 288、元素邏輯 19、網格 15、截圖工具 6，合計 405 項通過。手機實機 NOT RUN。 |
+| 美術 harness | PASS。AGENTS.md 與 CLAUDE.md 均連到 [B 版規格](harness/MAGE_B.md)，已逐字比對原始生成 prompt 並核對三張輸入圖的順序。 |
+
+## 角色重設草稿（2026-11-18）
+
+Harvey 提供的風格說明含較修長與極 Q 兩種比例，並要求「兩種都生成，將共同點捏合」。本輪使用內建 ImageGen 分別生成 A、B，再以兩張實際輸出與 CQ 原始法師參考生成 C；三版均保留黑短鮑伯、紫帽紫袍、酒紅點綴及大型琥珀法杖。A 著重肩腰、袍身與雙腿；B 著重大頭方圓臉與短軀幹；C 保留 B 的簡潔五官，加入 A 的腰線、衣襬、靴子層次。法杖立於身旁，手掌覆在杖柄前方，握點上下均可見杖身。
+
+| 交付 | 驗證狀態 |
+| --- | --- |
+| 三張透明造型草稿 | PASS（產圖與人工檢視）。[A 修長 Q 版](reference/characters/mage_variants/a_tall.png)・[B 極致 Q 版](reference/characters/mage_variants/b_chibi.png)・[C 融合版](reference/characters/mage_variants/c_fused.png)。生成圖不是精確原生像素圖集，提示詞中的頭身比與色數只是生成目標，未宣稱輸出已精確符合。 |
+| 等高比較圖 | PASS（產圖與人工檢視）。[三版並排](reference/characters/mage_variants/comparison.png) 為 1500×650。用 alpha ≥128 的可見輪廓對齊總高度，保持各圖長寬比與 nearest 取樣；微弱透明邊緣仍完整繪出。臉、帽子、袍身、雙靴與握杖可一起比較。 |
+| 參考造型偏好 | PASS。Harvey 從三張草稿中貼回 B「極致 Q 版」，表示這個比較好。遊戲圖集按 B 轉製；實際遊戲造型的主觀驗收另記。 |
+| B 版遊戲圖集 | PASS。正面依 B 原稿轉為原生像素，背面與側面共用帽子、握杖與腳底基準。每格 56×48，站立可見高 44 px，保留既有 21 個不透明色。去帽顱頂至下巴為 14 px，下巴至鞋底為 13 px。 |
+| 動畫與杖光 | PASS。角色測試 45 項通過。包括三方向共 18 格的姿勢、掌心上下的杖柄、腳底位置與四面向的晶石光源。另跑元素光點 12 項、場景規則 288 項，全部通過。 |
+| Godot 視窗 | PASS。已執行 `tools/capture.sh` 並檢視村莊晨、日、昏、夜與元素滿載、夜間施放共六張截圖。[原稿、原生像素與遊戲截圖對照](screenshots/mage_b_comparison.png) |
+| B 版遊戲造型 | PASS。Harvey 看過遊戲對照後肯定角色造型，要求調整與建築的相對大小。實玩手感 NOT RUN。 |
+
+B 版完整提示詞收於[角色美術 harness](harness/MAGE_B.md)，A、C 兩稿則在[草稿提示詞索引](reference/characters/mage_variants/prompts.txt)。參考草稿放在受 `docs/.gdignore` 排除的目錄。
 
 ## 第四輪角色與元素顯示（2026-11-18）
 
@@ -29,7 +55,8 @@ One original full body playable chibi mage sprite, facing slightly right toward 
 | 元素鍵 | PASS。水滴、火焰、閃電與雪花四種像素圖示都有對應觸控回歸，HUD 共 19 項通過。 |
 | 環繞光點 | PASS。空佇列、重複元素、滿載、水火融合、移動跟隨、施放與清空共 12 項通過；取消瞄準保留光點另由 HUD 操作測試驗證。 |
 | 遊戲視窗 | PASS。實際檢視村莊晨／日／昏／夜、白天滿佇列及夜間施法，共 6 張。另以遊戲鏡頭錄下水火融合、補入其他元素與施放。[四元素 HUD](screenshots/iteration4_day_elements.png)・[環繞動畫](screenshots/iteration4_mage_orbit.webp) |
-| 手機與造型驗收 | NOT RUN。尚無 Android 實機幀時間或觸控手感量測。Harvey 對終版造型的主觀驗收待回饋。 |
+| 造型驗收 | FAIL。Harvey 看過二頭身版本後仍認為缺少 Crusaders Quest 風格，要求先提供同高度的整體對照，並指出武器握持不清楚。目前帽冠偏扁，手掌、杖柄與袖口連成橫線，包握輪廓待重畫。 |
+| 手機實機 | NOT RUN。尚無 Android 實機幀時間或觸控手感量測。 |
 
 第四輪回歸合計 396 PASS、0 FAIL（19 邏輯、19 HUD、12 光點、37 角色、288 場景、15 網格、6 截圖腳本）。
 
@@ -118,7 +145,7 @@ One original full body playable chibi mage sprite, facing slightly right toward 
 
 ## 5. 下一步
 
-1. Harvey 實玩黑短髮法師，確認一般鏡頭下的剪影、四方向動作與戰鬥時光點的可讀性。細修維持本版色盤。
+1. Harvey 實玩 B 版法師，確認一般鏡頭下的剪影、四方向移動與光點可讀性。細修沿用既有 21 色。
 2. 做 Mobile renderer 降級，並在手機上量 frame time。draw call 已經壓到 800 以下，但這不代表手機跑得動；不得靠關掉有光燈具或陰影來達標。
 3. Android 實機與四時段截圖驗收；沒有裝置就寫 NOT RUN。
 4. 玩法草案由 Harvey 拍板後，才接敵人假人、傷害與環境互動；不要自己決定待定規則。
