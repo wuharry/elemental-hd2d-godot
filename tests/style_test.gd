@@ -64,10 +64,26 @@ func _assembly_checks() -> void:
 	for i in 3:
 		await physics_frame
 	var player: Player = main.get("player")
-	_check(is_equal_approx(player.sprite.pixel_size, 1.2 / PX_PER_M), "B mage displays at 120% of world pixel size")
+	_check(is_equal_approx(player.sprite.pixel_size, 1.2 / PX_PER_M),
+		"B mage retains 120% native horizontal pixel size")
+	_check(is_equal_approx(player.sprite.scale.y * cos(deg_to_rad(main.get("rig").pitch_deg)), 1.0),
+		"character stretch cancels camera pitch so pixels read square")
 	_check(player.sprite.texture_filter == BaseMaterial3D.TEXTURE_FILTER_NEAREST, "character nearest filter")
 	_check(player.sprite.alpha_cut == SpriteBase3D.ALPHA_CUT_DISCARD, "character writes cutout depth")
 	_check(player.sprite.shaded, "character receives scene lighting")
+	for layer: Sprite3D in [player.weapon.sprite, player.hand_sprite]:
+		_check(layer.texture_filter == BaseMaterial3D.TEXTURE_FILTER_NEAREST
+			and layer.alpha_cut == SpriteBase3D.ALPHA_CUT_DISCARD and layer.shaded
+			and layer.layers == 2, "%s preserves character pixel, depth and lighting rules" % layer.name)
+	var rig: CameraRig = main.get("rig")
+	rig.pitch_deg = 45.0
+	await process_frame
+	await process_frame
+	_check(is_equal_approx(player.camera_pitch_deg, 45.0)
+		and is_equal_approx(player.sprite.scale.y * cos(deg_to_rad(45.0)), 1.0),
+		"runtime camera pitch changes propagate into character compensation")
+	rig.pitch_deg = 33.0
+	await process_frame
 	var tod: TimeOfDay = main.get("time_of_day")
 	tod.set_time("night", true)
 	for id in ["forest", "snow", "dungeon", "village"]:

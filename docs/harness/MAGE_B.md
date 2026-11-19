@@ -27,7 +27,15 @@ Make ONE full-body original playable female mage character design, isolated on t
 
 ## Godot 轉製與驗收
 
-提示詞中的約 1.7 頭身與 48×56 是生成草稿時的目標。遊戲圖集以 **56×48** 為一格，按正面、背面、側面排三列，每列兩格待機、四格走路，朝左使用鏡像。B 版正面待機的去帽顱頂至下巴為 14 px，下巴至靴底為 13 px。戴帽的可見高度為 44 px。主角在世界內以腳底為基準呈現 1.20 倍，對應 1.65 公尺。
+提示詞中的約 1.7 頭身與 48×56 是生成草稿時的目標。遊戲圖集以 **56×48** 為一格，按正面、背面、側面排三列，每列四格待機、六格走路，朝左使用鏡像。B 版正面待機的去帽顱頂至下巴為 14 px，下巴至靴底為 13 px。戴帽的可見高度為 44 px。主角在世界內以腳底為基準呈現 1.20 倍，基準高為 1.65 公尺。
+
+2026-11-19，Harvey 選定保留四方向並增為六格走路。呼吸約每 0.8 秒循環，眨眼獨立計時。跑步有接觸、抬腳與小跳步，兩隻靴子逐格留出間隙。帽尖、髮尾與衣襬有相對身體的延遲，持杖手跟著杖柄一起擺，杖光依實際姿勢定位。
+
+活動時帽簷內襯必須持續覆住頭髮交界，肩袖與握手、袍內與靴口也必須接合；逐格檢查不能只看站姿。保留帽尖彎折、法杖叉口與雙靴之間的留白。
+
+Harvey 另指定法杖獨立成物件，以便之後替換法杖或魔導書。遊戲以角色本體、武器、握持手三層呈現：本體與手各有 10×3 圖集，武器使用自己的貼圖與握點。預設外觀在 `assets/weapons/amber_staff.tres`，由 `WeaponVisual` 指定貼圖、握點及發光位置，`Player.equip_weapon()` 負責替換。手掌位於武器前方，袖口接回角色；鏡像與俯角補償需同步。完整待機參考 `mage_idle.png` 與此處 B 原始 prompt 繼續保留。
+
+紙片保持直立，以腳底為原點垂直乘上 `1/cos(pitch)`。33° 時約為 1.192，補償後紙片高度約 1.97 公尺，水平像素仍為 1.20/32 公尺。用實際遊戲畫面核對臉型與頭身比例，並檢查遮擋、接地和陰影。角色補光使用 0.3，白天與夜間都需看圖確認黑髮、紫帽和琥珀晶面。
 
 改圖集時編輯 [角色產生器](../../tools/gen_character.gd)，重新執行產生器與匯入。角色回歸會檢查色票、二頭身、四面向、杖柄接點與杖光位置；元素回歸會檢查角色身邊的光點。最後打開截圖，看正常鏡頭下的雙靴、杖頭、握持與人物相對門窗的大小。[村莊人物與門窗尺寸對照，右欄為現行倍率](../screenshots/mage_b_village_scale.png)
 
@@ -35,6 +43,7 @@ Make ONE full-body original playable female mage character design, isolated on t
 godot --headless --path . --script res://tools/gen_character.gd
 godot --headless --path . --import
 godot --headless --path . --script res://tests/player_animation_test.gd
+godot --headless --path . --script res://tests/character_layers_test.gd
 godot --headless --path . --script res://tests/element_orbit_test.gd
 tools/capture.sh
 ```

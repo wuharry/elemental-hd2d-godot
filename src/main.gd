@@ -45,6 +45,8 @@ func _ready() -> void:
 	rig.reveal_foliage = not args.has("--no-reveal")
 	add_child(rig)
 	player.camera_yaw = rig.yaw()
+	player.camera_pitch_deg = rig.pitch_deg
+	player.aim_dir = Vector3.BACK.rotated(Vector3.UP, player.camera_yaw)
 
 	if not args.has("--nohud") and ResourceLoader.exists("res://src/ui/hud.gd"):
 		hud = (load("res://src/ui/hud.gd") as Script).new()
@@ -65,6 +67,7 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	if is_instance_valid(player) and is_instance_valid(rig):
 		player.camera_yaw = rig.yaw()
+		player.camera_pitch_deg = rig.pitch_deg
 
 
 func switch_scene(id: String) -> void:

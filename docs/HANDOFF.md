@@ -2,7 +2,40 @@
 
 規則看 [BLUEPRINT.md](BLUEPRINT.md)。這份記錄實際完成與驗證狀態；靜態截圖不能代替操作手感或手機實機測試。
 
-最後更新：2026-11-18（B「極致 Q 版」定為主角造型，調整村莊中的人物大小）
+最後更新：2026-11-19（動畫接縫修補、法杖拆成可替換物件）
+
+## 活動接縫與獨立武器（2026-11-19，Harvey 已確認本版）
+
+Harvey 看過實際遊戲預覽後，確認此版並要求 commit、push 到 GitHub。本版包含下列接縫與武器拆分，以及同日的俯角補償、四方向六格動畫；原本已存在的 `project.godot` 編輯器設定差異保留在本機，不納入這次提交。
+
+Harvey 指出移動／呼吸時帽子與頭部之間透出背景，也要求修正同類問題，並把法杖拆成獨立物件，供之後換法杖或魔導書。前一輪抽樣漏掉帽簷開縫，不能以當時的動畫 PASS 代表接縫驗收通過。
+
+本輪在帽簷後方補內襯，補齊肩袖到握手、袍內到靴口的重疊，保留帽尖彎折、杖叉、雙靴之間的刻意留白。沿用 B 造型、21 色、人物尺寸與四方向六格走路。
+
+本體圖集 `mage_atlas.png` 已移除武器與握持手；`mage_hand_atlas.png` 是手與袖口覆蓋層，`mage_staff.png` 是獨立法杖。遊戲使用 `HeldWeapon` 節點，`WeaponVisual` 資源指定貼圖、握點及可選光源；預設是 `assets/weapons/amber_staff.tres`。`Player.equip_weapon(resource)` 替換外觀，傳 `null` 卸下。武器在角色前、手指後，三層同步鏡像與俯角補償。武器光跟隨自身發光位置；完整待機參考 `mage_idle.png` 保留。
+
+| 交付 | 驗證狀態 |
+| --- | --- |
+| 30 格接縫與拆層 | PASS。`character_layers_test.gd` 126 項直接檢查輸出 PNG：帽髮交界、封閉透明孔、身體連通、袖手接合及拆層色票。原圖 13 個姿勢的帽髮檢查帶共有 96 個透明像素，修補後 30 格均為 0；複審發現的兩個袍靴單像素孔也已修正。 |
+| 換裝與握點 | PASS。角色回歸 93 項，含原法杖、16×12 測試書本、卸下與重新裝備；逐一核對 30 姿勢 × 兩種鏡像 × 0°／33°／55° 下的握點與發光位置。書本是測試圖，不是正式素材。 |
+| 回歸 | PASS。接縫 126、角色 93、場景 292、HUD 19、光點 13、元素邏輯 19，共 562 項。 |
+| 真實畫面與動態 | PASS（錄製與逐格檢視）。`tools/capture.sh` 產出四時段、滿佇列與夜間施法六張新圖，均已實際檢視。另以真實主場景和 `move_input` 錄製 150 格、約 6.3 秒，檢視其中 34 種姿勢／方向組合及前景遮擋；帽髮接縫與握杖正常。[實際遊戲動態](screenshots/mage_motion.webp)・[修補前後](screenshots/mage_seams_comparison.png)・[30 格合成圖集](screenshots/mage_motion_sheet.png)。操作手感與手機實機 NOT RUN。 |
+| 正式魔導書素材／戰鬥差異 | NOT RUN。本輪建立可替換外觀介面；正式魔導書造型、攻擊與技能規則尚未製作。 |
+
+## 角色畫面修正（2026-11-19，納入本版）
+
+接手時已有俯角補償、補光與腳步的未提交修改。本輪依 Harvey 指示完成修正，並依他選定的「保留四方向、6 格走路」重做動畫。紙片以腳底為軸垂直拉長 1/cos(pitch)，水平像素保留 1.20/32 公尺。33° 時垂直倍率約 1.192，站立紙片高約 1.97 公尺，中心投影等效高度約 1.65 公尺。俯角每幀由 `main.gd` 傳入，調整後杖光立即重新定位。透視與螢幕取樣仍需實際看圖。
+
+補光為 0.3。正面、背面與側面統一按水平朝向鏡像，方向正規化後水平分量超過 0.12 才切換左右。圖集是 10 欄 × 3 列，每列 3 個呼吸姿勢、1 格眨眼與 6 格跑步。呼吸週期 0.8 秒，每 3.2 秒眨眼。預設跑步 18 fps，步頻按實際位移速度調整，帽子與杖手比身體晚一格，衣襬與髮尾分開擺動。晶石、掌心與杖光共用每格位移資料。
+
+| 交付 | 驗證狀態 |
+| --- | --- |
+| 俯角補償與補光 | PASS。實際透視投影測試涵蓋 0°、33°、55°，驗證像素比例、既定寬度、腳底接地與杖光。`tools/capture.sh` 四時段、滿佇列與夜間施法共六張截圖已產出並檢視。 |
+| 左右翻面 | PASS。涵蓋淺左下、左上、側身、低幅度搖桿與垂直附近遲滯，另驗證往左走時朝右下瞄準。 |
+| 回歸 | PASS。角色 81、元素邏輯 19、光點 13、HUD 19、場景 290，共 422 項。 |
+| 跑步與像素素材 | PASS。30 格逐格驗證透明邊界、21 色、雙靴間隙、接地與騰空姿勢、握杖及光源位置。杖頭選擇性深色收邊、眼睫、領結與靴邊已細修。 |
+| 實際動態 | PASS（錄製與逐格檢視）。以真實主場景和 `move_input` 錄下 150 張畫面，包括四格待機和每個跑步段的六個姿勢，移動時保留地面作接地參考。[村莊動態](screenshots/mage_motion.webp)・[30 格圖集](screenshots/mage_motion_sheet.png)・[前後截圖](screenshots/mage_motion_comparison.png)。前後截圖的舊畫面在眨眼格，供對照高度與接地。Harvey 操作手感驗收 NOT RUN。 |
+
 
 ## B 版角色與建築比例（2026-11-18）
 
@@ -158,6 +191,7 @@ godot --headless --path . --editor --import --quit
 godot --headless --path . --script res://tests/run_tests.gd
 godot --headless --path . --script res://tests/hud_input_test.gd
 godot --headless --path . --script res://tests/player_animation_test.gd
+godot --headless --path . --script res://tests/character_layers_test.gd
 godot --headless --path . --script res://tests/element_orbit_test.gd
 godot --headless --path . --script res://tests/style_test.gd
 godot --headless --path . --script res://tests/mesh_batch_test.gd
@@ -186,6 +220,7 @@ tools/capture.sh --nohud --pos=-13,3.1 --shots=day --tag=occlusion_off --no-reve
 | 所有場景的四時段光影 | `time_of_day.gd` 的 `PRESETS`（含 `scene_overrides`） |
 | 貼圖與角色 | `tools/gen_textures.gd`、`tools/gen_character.gd`；重跑後匯入 |
 | 角色動畫／瞄準 | `src/player/player.gd` |
+| 手持武器外觀與握點 | `src/player/held_weapon.gd`、`weapon_visual.gd`、`assets/weapons/amber_staff.tres` |
 | 佇列光點與元素圖示 | `src/player/element_orbit.gd`、`tools/gen_element_icons.gd` |
 | 鏡頭／樹冠鏤空 | `camera_rig.gd`、`shaders/foliage_reveal.gdshaderinc` |
 | 網格合併 | `mesh_batcher.gd`、`mats.gd`、`batched_triplanar.gdshader`、`foliage_block.gdshader` |

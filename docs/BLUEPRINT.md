@@ -25,8 +25,8 @@
 | A6 | 方塊貼圖走 triplanar | `Mats.tri()`（local triplanar），用 `BoxMesh.size` 定尺寸，**不要用 node scale**；合併時由 `Mats.batched_tri()` 與頂點自訂欄位保留原始座標、法線與切線 | scale 會把像素拉長，破壞 A1 |
 | A7 | 光影數值只放一處 | 四個時段的太陽、環境光、霧、窗光、路燈全部在 `src/world/time_of_day.gd` 的 `PRESETS` | 調色時不用滿專案找數字 |
 | A8 | 暖冷對比 | 人造光（窗、路燈、營火）一律暖色；陰影與夜晚環境光偏冷 | 兩張參考圖的氛圍都靠這個 |
-| A9 | 角色是 2 頭身像素圖片 | `Sprite3D`、繞 Y 軸面向鏡頭、吃場景光、`alpha_cut`（不用半透明） | 半透明物件不寫深度，景深會把它糊錯 |
-| A11 | Q 版世界比例 | 戴帽 B 主角可見高 1.65 公尺（44 原生像素 × 1.20 ÷ 32）。門高 1.5 公尺、一層樓 1.6 公尺、窗 0.75 公尺（24 px） | 用正常鏡頭同時看清主角和建築 |
+| A9 | 角色是 2 頭身像素圖片 | `Sprite3D`、繞 Y 軸面向鏡頭、吃場景光、`alpha_cut`。以腳底為原點，垂直補償鏡頭俯角的 `1/cos(pitch)`，保留原像素寬度 | 維持紙片直立與接地，讓畫面上的頭身比例接近原稿 |
+| A11 | Q 版世界比例 | 戴帽 B 主角基準高 1.65 公尺（44 原生像素 × 1.20 ÷ 32），33° 俯角下紙片補償高約 1.97 公尺。門高 1.5 公尺、一層樓 1.6 公尺、窗 0.75 公尺（24 px） | 用正常鏡頭同時看清主角和建築 |
 | A10 | 場景要有會動的東西 | 風吹花草與樹、落葉、蝴蝶、鳥、煙囪煙、塵埃光點、雲影、夜晚螢火蟲 | 驗收條件明寫「生動」 |
 
 ## 3. 算繪設定
@@ -76,6 +76,7 @@ godot --headless --path . --import                                # 讓引擎重
 godot --headless --path . --script res://tests/run_tests.gd       # 純邏輯測試
 godot --headless --path . --script res://tests/hud_input_test.gd  # 操作路徑測試（載入真正的 main 場景送觸控事件）
 godot --headless --path . --script res://tests/player_animation_test.gd # 四方向、瞄準、動畫
+godot --headless --path . --script res://tests/character_layers_test.gd # 逐格接縫與角色／武器拆層
 godot --headless --path . --script res://tests/element_orbit_test.gd # 佇列狀態與角色周身光點
 godot --headless --path . --script res://tests/style_test.gd      # 四場景組裝與切換 + 逐場景硬規則（第 2、8 節；不是視覺驗收）
 godot --headless --path . --script res://tests/mesh_batch_test.gd # 合併前後幾何與材質資料
@@ -128,11 +129,13 @@ godot --path .                                                    # 實際遊玩
 ## 9. 角色守則（之後的角色、敵人、隊友）
 
 - **風格**：參考 `docs/reference/characters/`（Harvey 指定 Crusaders Quest 那種 Q 版像素風）。只學比例與畫法：大頭小身體、不對稱髮束、彩色描邊、誇張的裝備剪影。不照抄任何現有角色的造型、配色或圖。參考圖只放在 repo 裡給人看，不打包進遊戲。
-- **規格**：圖格 56×48，原生單位為 1/32 公尺。B 主角站立戴帽的可見身高為 44 px，世界顯示倍率 1.20（1.65 公尺，A11）。腳底對齊地面。alpha 只能是 0 或 255，因為角色走 `alpha_cut`（A9）。
+- **規格**：圖格 56×48，原生單位為 1/32 公尺。B 主角站立戴帽的可見身高為 44 px，世界顯示倍率 1.20（基準高 1.65 公尺，A11），垂直另補償鏡頭俯角。接觸姿勢的腳底對齊地面，跑步騰空格由圖集中的抬腳表現。alpha 只能是 0 或 255，因為角色走 `alpha_cut`（A9）。
 - **二頭身的量法**：以站立待機圖的顱頂、下巴、腳底三條基準線，核對「顱頂至下巴」與「下巴至腳底」約等長。量測先拿掉帽子，法杖與頭飾也不計入人體身高。帶帽的可見高度另依 A11 檢查。[第一輪原始要求](reference/round1_brief.png)
 - **描邊**：外框取相鄰那格顏色加深，再往墨色 `#302a43` 拉近，最後吸附到色盤裡的描邊色。不要用一整圈純黑。
 - **主角造型與色盤**：Harvey 選定 B「極致 Q 版」。細修沿用 B 原稿與遊戲圖集的 21 色；其他角色可另開色盤。參考圖順序、完整原始 prompt、Crusaders Quest 畫法與轉製驗收收在 [角色美術 harness](harness/MAGE_B.md)。
 - **臉型**：分開量露臉與頭髮。兩張參考的下巴約為眼頰寬的 75–80%，下緣短平，近眼比遠眼寬，瀏海只留一道窄額縫。原圖有混色，邊界容許約一個來源像素的誤差。[露臉與五官量測](reference/characters/cq_face_measurement.png)・[黑色短鮑伯參考](reference/characters/violet_mage_concept.png)
 - **戴帽與身體**：法師參考的左側帽簷壓在近側鬢髮前，下沿向右上揚約 13°，前額處有轉折。下巴緊接窄領，肩線斜落，腰比肩窄，翻起的袍尾撐開衣襬。法杖往身體外側伸出，杖頭與露臉寬度相近。以帽冠到衣襬為基準並排檢查。[法師比例參考](reference/characters/cq_mage_proportions.png)
-- **動畫**：圖集 6 欄 × 3 列。三列依序是正面、背面、側面，每列 2 格待機加 4 格走路；左側用鏡像。新角色沿用同一套排法，`player.gd` 的換格邏輯才能共用。
+- **動畫**：Harvey 選定保留四方向、6 格走路。圖集 10 欄 × 3 列，依序為正面、背面、側面，每列 4 格待機（呼吸與眨眼）加 6 格走路。所有面向統一按水平朝向鏡像，接近純上下時保留前次左右方向。帽尖、衣襬、持杖手與杖有分層延遲，雙靴保持間隔，步頻依實際移動速度調整。
+- **活動接縫**：帽簷下保留內襯，袖口與肩、袍內與靴口保留重疊。所有方向的待機與跑步都不能因分層位移而透出背景；保留帽尖彎折、杖叉及雙靴之間的刻意留白。
+- **手持物件**：角色本體、武器、握持手分層。`mage_atlas.png` 只含角色本體，`mage_hand_atlas.png` 是握持手圖集；`mage_staff.png` 是獨立法杖。`HeldWeapon` 依 `WeaponVisual` 的貼圖、握點及可選光源掛到手部，`Player.equip_weapon()` 可替換法杖、魔導書外觀或卸下。換裝不重畫角色圖集，三層共用鏡像、俯角補償與最近取樣，手指位於武器前方。`mage_idle.png` 僅作完整造型參考。
 - **產生方式**：照 A5，角色圖由 `tools/gen_character.gd` 這類產生器輸出，不手改 PNG。

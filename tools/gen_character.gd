@@ -5,8 +5,9 @@ extends SceneTree
 const OUT := "res://assets/characters/"
 const W := 56
 const H := 48
-const COLUMNS := 6
-const ROWS := 3
+const CharacterAnimation := preload("res://src/player/character_animation.gd")
+const COLUMNS := CharacterAnimation.COLUMNS
+const ROWS := CharacterAnimation.ROWS
 
 # 墨色、黑髮、紫布、酒紅帽帶、皮革與金屬、膚色、琥珀。
 const PALETTE := {
@@ -54,6 +55,19 @@ const HAT := [
 	"..iii",
 ]
 
+# 帽簷原本只畫前緣，頭與帽子分開延遲後，兩者之間會露出背景。
+# 帽內襯先畫在頭髮後面；只補帽簷包圍的內側，不封住帽尖彎鉤的留白。
+const HAT_LINING := [
+	"....................aaaaaaaaaaa",
+	"...................aaaaaaaaaaaa",
+	"..................aaaaaaaaaaaaa",
+	"................aaaaaaaaaaaaaaa",
+	"..............aaaaaaaaaaaaaaaaa",
+	"...........aaaaaaaaaaaaaaaaaaaa",
+	"...........aaaaaaaaaaaaaaaaaaaa",
+	".......aaaaaaaaaaaaaaaaaaaaaaaa",
+]
+
 const FRONT_HEAD := [
 	"........hhhhjjjjjhjjh",
 	".....hhhhjjjjhhhjjhjuh",
@@ -64,7 +78,7 @@ const FRONT_HEAD := [
 	"hhhhhhhjjjjjnhjhjjhhjjjh",
 	"hhhhhhjjjjjnnjjhjjhnjhjh",
 	"hhhjjhjjjhhhhhnjjhnnjhjh",
-	"hjjjhhhjjhhnhhnhnnnhhhjh",
+	"hjjjhhhjjhhkkknhnnnhhhjh",
 	"hjhjnnhhjhnnrrnnnnrhhjh",
 	"hjhjnxhhjhnnrrnnnnrhjjj",
 	"hjhjhnhhjjnnssnnnnshjhj",
@@ -117,12 +131,12 @@ const SIDE_HEAD := [
 const FRONT_ROBE := [
 	".....avvymha",
 	"...vvvvvkykvva",
-	"..vyyhkskshyya",
-	"..pvhhtsvssavh",
-	"..pvvvhtkhshvv",
-	"..vvpaavyvvaav",
-	"..vvpavyayavvv",
-	"hyyyygggyggyyh",
+	"..vyyhssrssyya",
+	"..pvhssrssavvh",
+	"..pvvhsrshvvva",
+	"..vvppavvvvaav",
+	"..vvppvvyvvvvv",
+	"hgyyyyyyyyyygh",
 	".hhh..hhh..hh",
 ]
 
@@ -158,14 +172,14 @@ const STAFF := [
 	"...ddmy",
 	"....dmyy.d",
 	"..y.ymoy..md",
-	"..m.ymoo..ym",
-	".dm.yooog..gy",
-	".yy.yooog..gy",
+	"..d.ymoo..yd",
+	".dm.yoood..gd",
+	".dy.yoood..gd",
 	"dmy..oggg.yd",
 	"dgyy..dd.yyd",
-	"..dyygymmyy",
+	"..dyygymmyd",
 	"....dgoygd",
-	".....dgyy",
+	".....dgyd",
 	".......dyk",
 	"......kyyk",
 	".......kbk",
@@ -211,16 +225,16 @@ const FAR_SLEEVE := [
 
 const BOOT := [
 	".fn",
-	"bgy",
-	"bdg",
-	"dddb",
+	"dgbd",
+	"dbdd",
+	"dddd",
 ]
 
 const BACK_BOOT := [
 	".dx",
-	"dbb",
-	"dbd",
-	"dddb",
+	"dbdd",
+	"dbdd",
+	"dddd",
 ]
 
 func _init() -> void:
@@ -231,22 +245,30 @@ func _init() -> void:
 			quit(1)
 			return
 
-	var atlas := Image.create(W * COLUMNS, H * ROWS, false, Image.FORMAT_RGBA8)
+	var atlas := Image.create_empty(W * COLUMNS, H * ROWS, false, Image.FORMAT_RGBA8)
+	var hands := Image.create_empty(W * COLUMNS, H * ROWS, false, Image.FORMAT_RGBA8)
+	var combined := Image.create_empty(W * COLUMNS, H * ROWS, false, Image.FORMAT_RGBA8)
 	for facing in ROWS:
 		for pose in COLUMNS:
-			var frame := draw_frame(facing, pose)
-			atlas.blit_rect(frame, Rect2i(0, 0, W, H), Vector2i(pose * W, facing * H))
+			var region := Rect2i(0, 0, W, H)
+			var origin := Vector2i(pose * W, facing * H)
+			atlas.blit_rect(draw_body_frame(facing, pose), region, origin)
+			hands.blit_rect(draw_hand_frame(facing, pose), region, origin)
+			combined.blit_rect(draw_frame(facing, pose), region, origin)
 
-	var idle := atlas.get_region(Rect2i(0, 0, W, H))
+	var idle := combined.get_region(Rect2i(0, 0, W, H))
 	var front: Image = idle.duplicate()
 	front.resize(W * 10, H * 10, Image.INTERPOLATE_NEAREST)
-	var preview: Image = atlas.duplicate()
+	var preview: Image = combined.duplicate()
 	preview.resize(W * COLUMNS * 4, H * ROWS * 4, Image.INTERPOLATE_NEAREST)
 	var outputs := {
 		OUT + "mage_idle.png": idle,
 		OUT + "mage_atlas.png": atlas,
+		OUT + "mage_hand_atlas.png": hands,
+		OUT + "mage_staff.png": draw_weapon_frame(),
 		"res://test_output/mage_front_preview.png": front,
 		"res://test_output/mage_unhatted.png": draw_frame(0, 0, false),
+		"res://test_output/mage_composed_atlas.png": combined,
 		"res://test_output/mage_preview.png": preview,
 	}
 	for path: String in outputs:
@@ -256,54 +278,104 @@ func _init() -> void:
 			printerr("Cannot save ", path, ": ", error_string(result))
 			quit(1)
 			return
-	print("Character atlas: ", atlas.get_size(), " (18 frames)")
+	print("Character atlas: ", atlas.get_size(), " (", COLUMNS * ROWS, " frames)")
 	quit()
 
 
-static func _stamp(img: Image, rows: Array, origin: Vector2i, mirrored: bool) -> void:
+static func _stamp(img: Image, rows: Array, origin: Vector2i, mirrored: bool,
+		tail_row := -1, tail_shift := Vector2i.ZERO) -> void:
 	for y in rows.size():
 		var row: String = rows[y]
 		for x in row.length():
 			var symbol := row.substr(x, 1)
 			if symbol == ".":
 				continue
-			var px := origin.x + x
+			var shift := tail_shift if tail_row >= 0 and y >= tail_row else Vector2i.ZERO
+			var px := origin.x + x + shift.x
 			if mirrored:
 				px = W - 1 - px
-			img.set_pixel(px, origin.y + y, PALETTE[symbol])
+			img.set_pixel(px, origin.y + y + shift.y, PALETTE[symbol])
 
 
-# 眼睫位在輪廓內，閉眼不改臉頰邊界。
-static func draw_frame(facing: int, pose: int, wearing_hat := true) -> Image:
+# 眼睫位在輪廓內，閉眼不改臉頰邊界。接地格的靴底仍在 y46。
+static func draw_body_frame(facing: int, pose: int, wearing_hat := true) -> Image:
 	var img := Image.create_empty(W, H, false, Image.FORMAT_RGBA8)
 	var back := facing == 1
 	var side := facing == 2
-	var bob: int = [0, 0, 0, -1, 0, -1][pose]
-	var stride: int = [0, 0, -1, -1, 1, 1][pose]
-	var far_foot := Vector2i(27 + stride, 43 - int(pose == 3))
-	var near_foot := Vector2i(32 - stride, 43 - int(pose == 5))
+	var walking := pose >= CharacterAnimation.WALK_START
+	var step := pose - CharacterAnimation.WALK_START
+	var body := Vector2i.ZERO
+	var hat := Vector2i.ZERO
+	var hem_sway := 0
+	var hand_swing := 0
+	var far_foot := Vector2i(27, 43)
+	var near_foot := Vector2i(32, 43)
+	if walking:
+		body = Vector2i([0, 1, 1, 0, -1, -1][step], [0, -1, -2, 0, -1, -2][step])
+		hat = Vector2i([-1, 0, 1, 1, 0, -1][step], [-2, 0, -1, -2, 0, -1][step])
+		hem_sway = [1, 1, 0, -1, -1, 0][step]
+		hand_swing = [1, 2, 1, -1, -2, -1][step]
+		# 前後腳交替跨出衣襬，接地與騰空各有清楚的鞋底。
+		far_foot += Vector2i([-2, -1, 0, 0, -1, -2][step], [0, -1, -3, -2, -2, -1][step])
+		near_foot += Vector2i([0, 1, 2, 2, 1, 0][step], [-2, -2, -1, 0, -1, -3][step])
+	else:
+		body.y = [0, -1, 0, 0][pose]
+		hat.y = [0, 0, -1, 0][pose]
+	# 腿從袍內伸到靴口，不能只留下獨立浮動的鞋子。
+	for foot: Vector2i in [far_foot, near_foot]:
+		for y in range(40 + body.y, foot.y + 1):
+			_stamp(img, ["ddd"], Vector2i(foot.x + 1, y), back)
 	var boot: Array = BACK_BOOT if back else BOOT
 	_stamp(img, boot, far_foot, back)
 	_stamp(img, boot, near_foot, back)
-	var swing: int = [0, 0, 1, 0, -1, 0][pose]
-	_stamp(img, FAR_SLEEVE, Vector2i(35 + swing - int(side), 39 + bob), back)
+	_stamp(img, FAR_SLEEVE, Vector2i(35 + hand_swing - int(side), 39) + body, back)
+	# 近袖從肩到握手有實際布料重疊；手與武器的延遲不能把袖口拉斷。
+	var grip_shift := CharacterAnimation.staff_offset(pose)
+	var sleeve_origin := Vector2i(23, 36) + grip_shift
+	_stamp(img, ["aavva", "avvva", "avvva", ".avva"], sleeve_origin, back)
+	_stamp(img, ["avvva", "avvva", ".vvva"], Vector2i(25, 35) + body, back)
+	# 髮尾移動時仍遮在肩部布料前，不讓髮束間隙穿過領口。
+	_stamp(img, ["aaaa", "avva", "avva"], Vector2i(34, 34) + body, back)
 	var robe: Array = [FRONT_ROBE, BACK_ROBE, SIDE_ROBE][facing]
-	_stamp(img, robe, Vector2i(24, 35 + bob), back)
+	_stamp(img, robe, Vector2i(24, 35) + body, back, 6, Vector2i(hem_sway, 0))
 	var head: Array = [FRONT_HEAD, BACK_HEAD, SIDE_HEAD][facing]
-	var head_y := 19 + bob + int(back and pose == 1)
-	_stamp(img, head, Vector2i(20, head_y), back)
-	if pose == 1 and not back:
-		if side:
-			_stamp(img, ["nnn", "err", "nnn"], Vector2i(39, 29 + bob), back)
-		else:
-			_stamp(img, ["nn", "er", "nn"], Vector2i(32, 29 + bob), back)
-			_stamp(img, ["n", "r", "n"], Vector2i(38, 29 + bob), back)
+	var head_origin := Vector2i(20, 19) + body
+	if back and pose == CharacterAnimation.BLINK_FRAME:
+		head_origin.y += 1
 	if wearing_hat:
-		_stamp(img, HAT, Vector2i(14, 3 + bob), back)
+		_stamp(img, HAT_LINING, Vector2i(14, 19) + hat, back)
+	_stamp(img, head, head_origin, back, 15, Vector2i(-hem_sway, 0))
+	if pose == CharacterAnimation.BLINK_FRAME and not back:
+		if side:
+			_stamp(img, ["nnn", "err", "nnn"], Vector2i(39, 29) + body, back)
+		else:
+			_stamp(img, ["nn", "er", "nn"], Vector2i(32, 29) + body, back)
+			_stamp(img, ["n", "r", "n"], Vector2i(38, 29) + body, back)
+	if wearing_hat:
+		_stamp(img, HAT, Vector2i(14, 3) + hat, back)
 		if back:
 			# 背面帽帶繞過帽冠，金扣只在正側面出現。
 			_stamp(img, ["...v", "..vvs", ".svvss", "ssssss", "ssssss", ".rrr"],
-				Vector2i(27, 13 + bob), true)
-	_stamp(img, STAFF, Vector2i(8, 7 + bob), back)
-	_stamp(img, GRIP, Vector2i(19, 36 + bob), back)
+				Vector2i(27, 13) + hat, true)
+	return img
+
+
+static func draw_hand_frame(facing: int, pose: int) -> Image:
+	var img := Image.create_empty(W, H, false, Image.FORMAT_RGBA8)
+	_stamp(img, GRIP, Vector2i(19, 36) + CharacterAnimation.staff_offset(pose), facing == 1)
+	return img
+
+
+static func draw_weapon_frame(facing := 0, pose := 0) -> Image:
+	var img := Image.create_empty(W, H, false, Image.FORMAT_RGBA8)
+	_stamp(img, STAFF, Vector2i(8, 7) + CharacterAnimation.staff_offset(pose), facing == 1)
+	return img
+
+
+# 合成只供靜態參考與預覽；遊戲使用身體、可替換武器、握手三個獨立圖層。
+static func draw_frame(facing: int, pose: int, wearing_hat := true) -> Image:
+	var img := draw_body_frame(facing, pose, wearing_hat)
+	var region := Rect2i(0, 0, W, H)
+	img.blend_rect(draw_weapon_frame(facing, pose), region, Vector2i.ZERO)
+	img.blend_rect(draw_hand_frame(facing, pose), region, Vector2i.ZERO)
 	return img
