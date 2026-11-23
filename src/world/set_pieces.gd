@@ -291,6 +291,69 @@ static func ruin_arch() -> Node3D:
 	return root
 
 
+## 一對石門借同一個紫色門環識別。門框有碰撞，中央與嵌在地上的踏石可穿行。
+static func waygate() -> Node3D:
+	var root := Node3D.new()
+	root.name = "Waygate"
+	var basalt := Mats.tri("brick", Color("#6d637b"))
+	var rim := Mats.tri("flagstone", Color("#afa6b2"))
+	var bronze := Mats.metal(Color("#b18750"))
+	var rune := Mats.emissive(Color("#a783fa"), 1.45)
+	for side: int in [-1, 1]:
+		var x := side * 1.27
+		Build.box(root, Vector3(0.76, 0.25, 0.88), Vector3(x, 0.125, 0), basalt)
+		Build.box(root, Vector3(0.48, 1.83, 0.58), Vector3(x, 1.16, 0), basalt)
+		Build.box(root, Vector3(0.54, 0.1, 0.66), Vector3(x, 0.59, 0), bronze)
+		Build.box(root, Vector3(0.1, 0.79, 0.04), Vector3(x, 1.25, 0.30), rune)
+		Build.box(root, Vector3(0.68, 0.22, 0.76), Vector3(x, 2.10, 0), rim)
+		Build.box(root, Vector3(0.53, 0.86, 0.63), Vector3(side * 1.02, 2.43, 0), basalt, Vector3(0, 0, side * 40))
+		Build.collider(root, Vector3(0.66, 2.2, 0.76), Vector3(x, 1.1, 0))
+	Build.box(root, Vector3(1.70, 0.35, 0.66), Vector3(0, 2.73, 0), rim)
+	Build.box(root, Vector3(0.32, 0.32, 0.72), Vector3(0, 2.72, 0), bronze, Vector3(0, 0, 45))
+
+	# 稜角門環保留中空輪廓。每段連接橢圓上的相鄰兩個頂點。
+	for i in 12:
+		var a := Vector2.from_angle(TAU * i / 12.0) * Vector2(0.98, 1.22)
+		var b := Vector2.from_angle(TAU * (i + 1) / 12.0) * Vector2(0.98, 1.22)
+		var mid := (a + b) * 0.5
+		Build.box(root, Vector3(a.distance_to(b) * 0.92, 0.07, 0.10), Vector3(mid.x, 1.35 + mid.y, 0.20),
+			rune, Vector3(0, 0, rad_to_deg((b - a).angle())))
+	for i in 3:
+		Build.box(root, Vector3(0.90 - i * 0.14, 0.048, 0.16), Vector3(0, 0.024, 0.35 + i * 0.34), rim)
+	var fx := preload("res://src/world/waygate_fx.gd").new()
+	fx.name = "PortalFX"
+	fx.position = Vector3(0, 1.35, 0)
+	root.add_child(fx)
+	return root
+
+
+## 六顆寶石圍繞一顆旋轉的雙錐形晶石，與旁邊能穿過的門環形狀不同。
+static func element_altar() -> Node3D:
+	var root := Node3D.new()
+	root.name = "ElementAltar"
+	var plinth := Mats.tri("flagstone", Color("#918b9b"))
+	var trim := Mats.metal(Color("#be995e"))
+	Build.box(root, Vector3(2.8, 0.18, 1.74), Vector3(0, 0.09, 0), plinth)
+	Build.box(root, Vector3(2.14, 0.48, 1.28), Vector3(0, 0.42, 0), Mats.tri("brick", Color("#716882")))
+	Build.box(root, Vector3(2.42, 0.07, 1.43), Vector3(0, 0.69, 0), trim)
+	Build.box(root, Vector3(2.60, 0.15, 1.59), Vector3(0, 0.80, 0), plinth)
+	Build.collider(root, Vector3(2.72, 0.88, 1.66), Vector3(0, 0.44, 0))
+	for i in Elements.SELECTABLE.size():
+		var point := Vector2.from_angle(TAU * i / Elements.SELECTABLE.size()) * Vector2(1.03, 0.58)
+		var socket := Vector3(point.x, 0.90, point.y)
+		Build.box(root, Vector3(0.38, 0.08, 0.38), socket, trim, Vector3(0, 45, 0))
+		var gem := Mats.emissive(Elements.color(Elements.SELECTABLE[i]), 0.95)
+		Build.prism(root, Vector3(0.32, 0.24, 0.32), socket + Vector3.UP * 0.16, gem, Vector3(0, 45, 0))
+	var focus := Node3D.new()
+	focus.position = Vector3(0, 1.63, 0)
+	focus.set_script(preload("res://src/world/spin.gd"))
+	focus.set("speed", 0.55)
+	root.add_child(focus)
+	Build.prism(focus, Vector3(0.65, 0.60, 0.48), Vector3(0, 0.30, 0), Mats.emissive(Color("#e1bdff"), 1.05))
+	Build.prism(focus, Vector3(0.65, 0.44, 0.48), Vector3(0, -0.22, 0), Mats.emissive(Color("#9970e0"), 1.05), Vector3(0, 0, 180))
+	return root
+
+
 static func fallen_log(length: float) -> Node3D:
 	var root := Node3D.new()
 	var bark := Mats.tri("bark")

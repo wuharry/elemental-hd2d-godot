@@ -30,6 +30,8 @@ enum Facing { FRONT, BACK, SIDE }
 const BREATH_PERIOD := 0.8
 
 var queue := ElementQueue.new()
+var loadout := Elements.LOADOUT.duplicate()
+var choosing_loadout := false
 ## 搖桿輸入，x 右、y 下（螢幕方向），長度 0..1。
 var move_input := Vector2.ZERO
 ## 右搖桿的螢幕方向；非零時瞄準優先於移動面向。
@@ -125,7 +127,9 @@ func _physics_process(delta: float) -> void:
 	var kb := Vector2(
 		float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
 		float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W)))
-	if kb != Vector2.ZERO:
+	if choosing_loadout:
+		input = Vector2.ZERO
+	elif kb != Vector2.ZERO:
 		input = kb.normalized()
 	var dir := Vector3(input.x, 0, input.y).rotated(Vector3.UP, camera_yaw)
 	velocity.x = dir.x * SPEED

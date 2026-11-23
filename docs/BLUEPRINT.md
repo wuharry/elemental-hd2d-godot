@@ -49,7 +49,7 @@ main.tscn ── src/main.gd（組裝根：只負責把下面的東西接起來�
    ├─ TimeOfDay      src/world/time_of_day.gd      四個時段與過場
    ├─ Player         src/player/player.gd          移動、像素角色、元素佇列與周身光點
    ├─ CameraRig      src/player/camera_rig.gd      跟隨 + 景深對焦
-   └─ Hud            src/ui/hud.gd                 雙搖桿、四元素圖示鍵、融合鍵
+   └─ Hud            src/ui/hud.gd                 元素配裝、雙搖桿、四元素圖示鍵、融合鍵
 src/combat/elements.gd、element_queue.gd：純邏輯（RefCounted，不碰節點），可單獨測試
 ```
 
@@ -61,7 +61,9 @@ src/combat/elements.gd、element_queue.gd：純邏輯（RefCounted，不碰節�
 
 ## 5. 規則狀態（玩法）
 
-- **已定**：四種出戰元素、四格佇列（限制的是目前占用格數）、可重複加入、融合後騰出格子、水＋火不自動融合、獨立融合鍵、左搖桿移動、右搖桿瞄準施放、長按元素開盾、三個快捷槽。
+HUD 圖示、融合鍵與祭壇配裝的畫面判準見 [元素 HUD 與祭壇操作 harness](harness/ELEMENT_HUD.md)。
+
+- **已定**：從六種有獨立圖示的基礎元素中選四種出戰、四格佇列（限制的是目前占用格數）、可重複加入、融合後騰出格子、水＋火不自動融合、獨立融合鍵、左搖桿移動、右搖桿瞄準施放、長按元素開盾、三個快捷槽。
 - **草案（Gemini 建議，Harvey 尚未拍板，程式裡標 `DRAFT`）**：融合固定取最後兩格、複合元素不可再融合、護盾長按後持續固定秒數、輕點右搖桿中心放副手、友傷比例。
 - 草案要改時只改 `src/combat/`，不要讓 UI 或世界層寫死這些規則。
 
@@ -71,7 +73,7 @@ src/combat/elements.gd、element_queue.gd：純邏輯（RefCounted，不碰節�
 cd /Users/harvey/repo/elemental-hd2d-godot
 godot --headless --path . --script res://tools/gen_textures.gd    # 重產世界貼圖
 godot --headless --path . --script res://tools/gen_character.gd   # 重產角色
-godot --headless --path . --script res://tools/gen_element_icons.gd # 重產四種元素圖示與環繞光點貼圖
+godot --headless --path . --script res://tools/gen_element_icons.gd # 重產六種元素圖示與環繞光點貼圖
 godot --headless --path . --import                                # 讓引擎重新匯入（.import 由引擎產生，不手改）
 godot --headless --path . --script res://tests/run_tests.gd       # 純邏輯測試
 godot --headless --path . --script res://tests/hud_input_test.gd  # 操作路徑測試（載入真正的 main 場景送觸控事件）

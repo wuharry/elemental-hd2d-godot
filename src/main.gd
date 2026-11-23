@@ -11,6 +11,8 @@ extends Node3D
 const CAPTURE_WARMUP_FRAMES := 150
 const CAPTURE_SAMPLE_FRAMES := 120
 const CAPTURE_SETTLE_FRAMES := 70
+const INTERACTION_RADIUS := 1.85
+const GATE_CHARGE_SECONDS := 0.24
 
 var world: GameWorld
 var time_of_day: TimeOfDay
@@ -18,6 +20,8 @@ var player: Player
 var rig: CameraRig
 var hud: Node
 var _options: Dictionary
+var _nearby_action := ""
+var _gate_charging := false
 
 
 func _ready() -> void:
@@ -27,7 +31,8 @@ func _ready() -> void:
 		get_tree().quit(2)
 		return
 
-	var def := Scenes.make(_options["scene"])
+	var preview_altar := args.has("--capture") and args.has("--loadout-menu")
+	var def := Scenes.make("forest" if preview_altar else _options["scene"])
 	world = GameWorld.new(def)
 	add_child(world)
 	_batch_world()
@@ -52,10 +57,14 @@ func _ready() -> void:
 		hud = (load("res://src/ui/hud.gd") as Script).new()
 		add_child(hud)
 		hud.call("setup", player, rig, time_of_day)
+		hud.interaction_requested.connect(interact)
 
-	if _options.has("pos"):
+	if preview_altar:
+		_place_at_interaction("equip")
+	elif _options.has("pos"):
 		player.position = _options["pos"]
 		rig.global_position = player.position + rig.look_offset
+	_update_interaction()
 	time_of_day.apply_scene(def)
 	time_of_day.set_time(_options["time"], true)
 	DisplayServer.window_set_title("elemental-hd2d-godot — " + def.title)
@@ -68,6 +77,65 @@ func _process(_delta: float) -> void:
 	if is_instance_valid(player) and is_instance_valid(rig):
 		player.camera_yaw = rig.yaw()
 		player.camera_pitch_deg = rig.pitch_deg
+		_update_interaction()
+
+
+func _nearest_interaction() -> String:
+	var at := Vector2(player.position.x, player.position.z)
+	var nearest := ""
+	var distance_limit := INTERACTION_RADIUS * INTERACTION_RADIUS
+	for action: String in world.def.interactions:
+		var distance := at.distance_squared_to(world.def.interactions[action])
+		if distance <= distance_limit:
+			nearest = action
+			distance_limit = distance
+	return nearest
+
+
+func _update_interaction() -> void:
+	var action := _nearest_interaction()
+	if action != _nearby_action:
+		_nearby_action = action
+		if hud:
+			hud.set_interaction(action)
+
+
+func interact() -> void:
+	if player.choosing_loadout or _gate_charging:
+		return
+	# 另一根手指可能仍在推搖桿；放開互動鍵時再核對位置。
+	if _nearest_interaction() != _nearby_action:
+		_update_interaction()
+		return
+	match _nearby_action:
+		"to_altar", "to_village":
+			_travel_through_gate(_nearby_action)
+		"equip":
+			if hud:
+				hud.open_loadout()
+
+
+func _travel_through_gate(action: String) -> void:
+	_gate_charging = true
+	get_tree().call_group("waygate_fx", "pulse")
+	await get_tree().create_timer(GATE_CHARGE_SECONDS).timeout
+	if action == "to_altar":
+		switch_scene("forest")
+		_place_at_interaction("equip")
+	else:
+		switch_scene("village")
+		_place_at_interaction("to_altar", 1.3)
+	_update_interaction()
+	get_tree().call_group("waygate_fx", "pulse")
+	_gate_charging = false
+
+
+func _place_at_interaction(action: String, toward_spawn: float = 0.0) -> void:
+	var point: Vector2 = world.def.interactions[action]
+	var spawn := Vector2(world.def.player_start.x, world.def.player_start.z)
+	point += point.direction_to(spawn) * toward_spawn
+	player.position = Vector3(point.x, world.def.player_start.y, point.y)
+	rig.global_position = player.position + rig.look_offset
 
 
 func switch_scene(id: String) -> void:
@@ -84,6 +152,7 @@ func switch_scene(id: String) -> void:
 	player.velocity = Vector3.ZERO
 	rig.global_position = player.position + rig.look_offset
 	time_of_day.apply_scene(def)
+	_update_interaction()
 	DisplayServer.window_set_title("elemental-hd2d-godot — " + def.title)
 
 
@@ -96,7 +165,7 @@ func _batch_world() -> void:
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
-	if key == null or not key.pressed or key.echo:
+	if key == null or not key.pressed or key.echo or player.choosing_loadout or _gate_charging:
 		return
 	match key.physical_keycode:
 		KEY_F1: time_of_day.set_time("morning")
@@ -108,10 +177,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		KEY_F7: switch_scene("snow")
 		KEY_F8: switch_scene("dungeon")
 		KEY_T: time_of_day.next_time()
-		KEY_1: player.queue.add(Elements.LOADOUT[0])
-		KEY_2: player.queue.add(Elements.LOADOUT[1])
-		KEY_3: player.queue.add(Elements.LOADOUT[2])
-		KEY_4: player.queue.add(Elements.LOADOUT[3])
+		KEY_E: interact()
+		KEY_1: player.queue.add(player.loadout[0])
+		KEY_2: player.queue.add(player.loadout[1])
+		KEY_3: player.queue.add(player.loadout[2])
+		KEY_4: player.queue.add(player.loadout[3])
 		KEY_F: player.queue.fuse_last_two()
 		KEY_SPACE: player.cast_queue(player.aim_dir)
 		KEY_ESCAPE: get_tree().quit()
@@ -132,7 +202,7 @@ func _read_options(args: PackedStringArray) -> Dictionary:
 	var safe_tag := RegEx.new()
 	safe_tag.compile("^[A-Za-z0-9_-]+$")
 	for arg in args:
-		if arg in ["--capture", "--nohud", "--no-batching", "--no-reveal"]:
+		if arg in ["--capture", "--nohud", "--no-batching", "--no-reveal", "--loadout-menu"]:
 			continue
 		var pair := arg.split("=", true, 1)
 		if pair.size() != 2:
@@ -216,6 +286,13 @@ func _capture_all() -> void:
 		ms, float(total_draw_calls) / CAPTURE_SAMPLE_FRAMES, CAPTURE_SAMPLE_FRAMES])
 	var shots: Array = _options["shots"]
 	var tag: String = "_" + _options["tag"] if not _options["tag"].is_empty() else ""
+	var show_loadout := hud != null and OS.get_cmdline_user_args().has("--loadout-menu")
+	if show_loadout:
+		interact()
+		if not player.choosing_loadout:
+			push_error("Loadout capture could not open the elemental altar")
+			get_tree().quit(1)
+			return
 	for time_name in shots:
 		time_of_day.set_time(time_name, true)
 		for i in CAPTURE_SETTLE_FRAMES:
@@ -223,12 +300,14 @@ func _capture_all() -> void:
 		var path := "%s/shot_%s%s.png" % [dir, time_name, tag]
 		if not _save_capture(path):
 			return
+	if show_loadout:
+		hud.close_loadout()
 	if not tag.is_empty():
 		get_tree().quit()
 		return
 	# 用實際佇列拍滿四元素的村景，方便在遊戲尺寸核對按鍵與環繞光點。
 	time_of_day.set_time("day", true)
-	for element in Elements.LOADOUT:
+	for element in player.loadout:
 		player.queue.add(element)
 	for i in CAPTURE_SETTLE_FRAMES:
 		await get_tree().process_frame

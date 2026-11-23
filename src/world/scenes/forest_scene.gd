@@ -12,12 +12,14 @@ func _init() -> void:
 	id = "forest"
 	title = "森林河谷"
 	player_start = Vector3(4.0, 0.0, 1.2)
+	interactions = {"equip": SHRINE + Vector2(0, 2.2), "to_village": Vector2(5.4, -8.7)}
 	play_half = Vector2(30.0, 19.0)
 	paths = [
 		{"pts": [Vector2(-40, 2), Vector2(-16, 1), Vector2(-5, 0), Vector2(1, 0), Vector2(10, -1.5), Vector2(22, -3), Vector2(40, -2)], "width": 2.2},
 		{"pts": [Vector2(10, -1.5), Vector2(11, -6), Vector2(9.5, -9.5)], "width": 1.6},
+		{"pts": [interactions["to_village"], interactions["equip"]], "width": 1.8},
 	]
-	dirt_spots = [{"c": CAMP, "r": 2.6}, {"c": SHRINE, "r": 2.2}]
+	dirt_spots = [{"c": CAMP, "r": 2.6}, {"c": SHRINE, "r": 2.8}, {"c": interactions["to_village"], "r": 2.2}]
 	bridges = [Rect2(-5.0, -1.25, 6.0, 2.5)]
 	ground = {
 		"base": "grass_ground", "base_tint": Color("#cfe0b4"),
@@ -89,6 +91,8 @@ func populate(w: GameWorld) -> void:
 	w.place(SetPieces.fallen_log(2.6), Vector2(-9.5, 5.0), -40.0)
 	w.place(SetPieces.fallen_log(3.6), Vector2(16.5, 4.0), 75.0)
 	w.place(SetPieces.ruin_arch(), SHRINE + Vector2(0, -1.0), -8.0)
+	w.place(SetPieces.element_altar(), SHRINE + Vector2(0, 0.6))
+	w.place(SetPieces.waygate(), interactions["to_village"], 48.0)
 	w.place(SetPieces.tent(Color("#c9b48a")), CAMP + Vector2(2.4, 1.2), -28.0)
 	w.place(PropBuilder.campfire(), CAMP + Vector2(-1.0, -0.6))
 	w.place(PropBuilder.crate(0.7), CAMP + Vector2(1.0, -2.4), 20.0)

@@ -140,6 +140,15 @@ static func emissive(color: Color, energy: float) -> StandardMaterial3D:
 	return m
 
 
+static func waygate_veil() -> ShaderMaterial:
+	const KEY := "waygate_veil"
+	if not _cache.has(KEY):
+		var mat := ShaderMaterial.new()
+		mat.shader = preload("res://shaders/waygate_veil.gdshader")
+		_cache[KEY] = mat
+	return _cache[KEY]
+
+
 ## 樹葉方塊：貼圖同 tri()，外加整塊隨風晃動。
 static func foliage(tint: Color = Color.WHITE, sway: float = 0.05) -> ShaderMaterial:
 	var key := "foliage:%s:%.3f" % [tint.to_html(), sway]

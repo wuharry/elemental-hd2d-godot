@@ -82,18 +82,56 @@ const GLYPHS := {
 		"......b.h.b",
 		"........b",
 	],
+	Elements.Type.EARTH: [
+		".......hhh",
+		"......hwwhh",
+		".....hhwwhhs",
+		"....hwwwhbbhs",
+		"...hhhhbhbbbhs",
+		"..hhhbbbhbbbbs",
+		"..hbbbbhsbbbbbs",
+		".hbbbbbsbbbbbbs",
+		".hbbbbbssbbbbbs",
+		".hbbbbsbbbbbbss",
+		"..sbbbsbbbbbsss",
+		"..ssbsbbbbbsss",
+		"...ssbbbbbsss",
+		"....sssssss",
+	],
+	Elements.Type.ARCANE: [
+		"........w",
+		".......hwh",
+		"..h...hbwbh...h",
+		".hwh..hbbbh..hwh",
+		"..h..hbbbbbh..h",
+		"....hbbhhhbbh",
+		"...hbbh...hbbh",
+		"..hhbh..w..hbhs",
+		".hbbbb.wwwh.bbbhs",
+		"..shbh..h..hbhs",
+		"...sbbh...hbbs",
+		"....sbbhhhbbs",
+		"..h..sbbbbbs..h",
+		".hwh..sbbbs..hwh",
+		"..h...sbwbs...h",
+		".......sws",
+		"........s",
+	],
 }
 const PALETTES := {
 	Elements.Type.WATER: {"s": Color("#285a99"), "b": Elements.INFO[Elements.Type.WATER]["color"], "h": Color("#65d3ef"), "w": Color("#ddffff")},
 	Elements.Type.FIRE: {"s": Color("#ba393c"), "b": Elements.INFO[Elements.Type.FIRE]["color"], "h": Color("#ff9f39"), "w": Color("#ffdf85")},
 	Elements.Type.LIGHTNING: {"s": Color("#c28035"), "b": Color("#f8b638"), "h": Elements.INFO[Elements.Type.LIGHTNING]["color"], "w": Color("#fff5ac")},
 	Elements.Type.ICE: {"b": Color("#62aaca"), "h": Elements.INFO[Elements.Type.ICE]["color"], "w": Color("#f0ffff")},
+	Elements.Type.EARTH: {"s": Color("#70503e"), "b": Elements.INFO[Elements.Type.EARTH]["color"], "h": Color("#e5b474"), "w": Color("#ffe2a8")},
+	Elements.Type.ARCANE: {"s": Color("#634294"), "b": Elements.INFO[Elements.Type.ARCANE]["color"], "h": Color("#dfa9ff"), "w": Color("#fff0ff")},
 }
 
 
 func _init() -> void:
-	var atlas := Image.create_empty(TILE * GLYPHS.size(), TILE, false, Image.FORMAT_RGBA8)
-	for element: int in GLYPHS:
+	var atlas := Image.create_empty(TILE * Elements.ICON_ORDER.size(), TILE, false, Image.FORMAT_RGBA8)
+	for column in Elements.ICON_ORDER.size():
+		var element: int = Elements.ICON_ORDER[column]
 		var rows: Array = GLYPHS[element]
 		var tile := Image.create_empty(TILE, TILE, false, Image.FORMAT_RGBA8)
 		for y in rows.size():
@@ -107,7 +145,7 @@ func _init() -> void:
 					if tile.get_pixelv(edge).a == 0.0:
 						tile.set_pixelv(edge, INK)
 				tile.set_pixelv(point, PALETTES[element][row[x]])
-		atlas.blit_rect(tile, Rect2i(0, 0, TILE, TILE), Vector2i(element * TILE, 0))
+		atlas.blit_rect(tile, Rect2i(0, 0, TILE, TILE), Vector2i(column * TILE, 0))
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT.get_base_dir()))
 	var err := atlas.save_png(OUT)
 	if err != OK:

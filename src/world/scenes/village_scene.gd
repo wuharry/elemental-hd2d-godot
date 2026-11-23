@@ -1,6 +1,8 @@
 extends SceneDef
 ## 村莊：石板路、木屋、花草地、池塘、井、營火。第一個做出來的場景，其他場景的風格以它為準。
 
+## 西出口的路面節點、門柱與互動共用中心。西側碰撞邊界在 x = -30。
+const WEST_GATE := Vector2(-28.0, 2.1)
 
 var lamps := [
 	Vector2(-6.5, -0.4), Vector2(4.3, -0.6), Vector2(11.6, -0.8),
@@ -28,8 +30,9 @@ func _init() -> void:
 	id = "village"
 	title = "村莊"
 	player_start = Vector3(0.6, 0.0, -1.2)
+	interactions = {"to_altar": WEST_GATE}
 	paths = [
-		{"pts": [Vector2(-40, 3.5), Vector2(-24, 1.6), Vector2(-13, -1.6), Vector2(-2, -3.0), Vector2(7, -2.5), Vector2(15, -3.0), Vector2(24, 0.0), Vector2(40, 2.0)], "width": 2.8},
+		{"pts": [Vector2(-40, 3.5), WEST_GATE, Vector2(-24, 1.6), Vector2(-13, -1.6), Vector2(-2, -3.0), Vector2(7, -2.5), Vector2(15, -3.0), Vector2(24, 0.0), Vector2(40, 2.0)], "width": 2.8},
 		{"pts": [Vector2(1.0, -2.8), Vector2(3.0, 2.0), Vector2(1.6, 8.0), Vector2(5.0, 14.0), Vector2(4.0, 26.0)], "width": 2.0},
 	]
 	dirt_spots = [
@@ -63,6 +66,7 @@ func _init() -> void:
 
 
 func populate(w: GameWorld) -> void:
+	w.place(SetPieces.waygate(), interactions["to_altar"], 62.0)
 	for t in trees:
 		w.tree(t["p"], t["s"], t["tint"])
 	w.scatter(46, Rect2(-34, -21, 68, 43), _small_thing)
