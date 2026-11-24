@@ -1,5 +1,6 @@
 class_name PropBuilder
 extends RefCounted
+const Water := preload("res://src/world/water_surface.gd")
 ## 小道具：路燈、柵欄、柴堆、水井、營火、木箱、石頭。全部用方塊堆（BLUEPRINT A3）。
 
 const IRON := Color("#26262c")
@@ -57,8 +58,8 @@ static func well() -> Node3D:
 		side.rotation.y = PI * 0.5 * i
 		root.add_child(side)
 		Build.box(side, Vector3(1.3, 0.7, 0.26), Vector3(0, 0.35, 0.52), stone)
-	var water := Build.box(root, Vector3(0.8, 0.05, 0.8), Vector3(0, 0.42, 0), null)
-	water.material_override = _water()
+	Water.add_surface(root, [Rect2(-0.4, -0.4, 0.8, 0.8)], 0.445, 0.05, Water.material())
+	Water.share_reflection(root, [Rect2(-0.4, -0.4, 0.8, 0.8)], 0.445)
 	Build.box(root, Vector3(0.12, 1.7, 0.12), Vector3(-0.58, 0.85, 0), wood)
 	Build.box(root, Vector3(0.12, 1.7, 0.12), Vector3(0.58, 0.85, 0), wood)
 	Build.box(root, Vector3(1.4, 0.1, 0.1), Vector3(0, 1.4, 0), wood)
@@ -135,27 +136,52 @@ static func campfire() -> Node3D:
 	return root
 
 
-static func _water() -> ShaderMaterial:
-	var m := ShaderMaterial.new()
-	m.shader = load("res://shaders/water.gdshader")
-	m.set_shader_parameter("normal_tex", Mats.tex("water_n"))
-	return m
-
-
 ## 池塘：水面 + 一圈石頭與土的岸。
 static func pond(rects: Array) -> Node3D:
 	var root := Node3D.new()
-	var water := _water()
+	Water.add_surface(root, rects, 0.08, 0.1, Water.material())
+	Water.add_reflections(root, rects, 0.08)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 4242
 	var rim := Mats.tri("stone_wall", Color("#b8b2a6"), 0.95, 1.4)
 	var mud := Mats.tri("dirt")
+	var bed_mat := Mats.tri("dirt", Color("#a9aca0"), 0.98)
+	var shelf_mat := Mats.tri("dirt", Color("#c8c5aa"), 0.98)
+	var outer: Array[Rect2] = []
+	var inner: Array[Rect2] = []
+	for rect: Rect2 in rects:
+		outer.append(rect.grow(0.25))
+		if rect.grow(-0.375).has_area():
+			inner.append(rect.grow(-0.375))
+	# 岸邊泥土只留在水域外；池底下沉，淺灘和中央保留真實深度差。
+	for area: Rect2 in Water.union_rects(outer):
+		for border: Rect2 in Build.subtract_rects(area, rects):
+			var c := border.get_center()
+			var mesh := Build.box(root, Vector3(border.size.x, 0.1, border.size.y), Vector3(c.x, 0.0, c.y), mud)
+			mesh.name = "PondBorder"
+	for area: Rect2 in Water.union_rects(rects):
+		var c := area.get_center()
+		var bed := Build.box(root, Vector3(area.size.x, 0.25, area.size.y), Vector3(c.x, -0.725, c.y), bed_mat)
+		bed.name = "PondBed"
+		for shelf: Rect2 in Build.subtract_rects(area, inner):
+			var center := shelf.get_center()
+			var mesh := Build.box(root, Vector3(shelf.size.x, 0.42, shelf.size.y), Vector3(center.x, -0.39, center.y), shelf_mat)
+			mesh.name = "PondShelf"
 	for r in rects:
 		var rect: Rect2 = r
 		var c := rect.get_center()
-		Build.box(root, Vector3(rect.size.x + 0.5, 0.1, rect.size.y + 0.5), Vector3(c.x, 0.0, c.y), mud)
-		Build.box(root, Vector3(rect.size.x, 0.1, rect.size.y), Vector3(c.x, 0.03, c.y), water)
 		Build.collider(root, Vector3(rect.size.x, 2.0, rect.size.y), Vector3(c.x, 1.0, c.y))
+	# 獨立種子保留既有岸石與睡蓮的位置；水下小石也由真正光影呈現。
+	var bed_rng := RandomNumberGenerator.new()
+	bed_rng.seed = 9301
+	var pebble_mat := Mats.tri("stone_wall", Color("#a4afa5"), 0.97)
+	if not inner.is_empty():
+		for i in 12:
+			var area: Rect2 = inner[i % inner.size()]
+			var p := area.position + area.size * Vector2(bed_rng.randf(), bed_rng.randf())
+			var s := bed_rng.randf_range(0.125, 0.28)
+			Build.box(root, Vector3(s, s * 0.6, s * 0.8), Vector3(p.x, -0.6 + s * 0.3, p.y), pebble_mat,
+				Vector3(0, bed_rng.randf_range(0, 90), 0)).name = "SubmergedPebble"
 	# 岸邊石頭：沿著外框撒，落在水裡的略過
 	for r in rects:
 		var rect: Rect2 = r

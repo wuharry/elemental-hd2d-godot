@@ -30,7 +30,7 @@ static func build(def: SceneDef) -> Node3D:
 		# 這一列沒有延續下去的區段，在這裡收尾成方塊
 		for key in open.keys():
 			if not runs.has(key):
-				_slab(root, key, int(open[key]), zi, mat)
+				_slab(root, key, int(open[key]), zi, mat, def.ponds)
 				open.erase(key)
 		for key in runs:
 			if not open.has(key):
@@ -84,11 +84,13 @@ static func _material(def: SceneDef) -> ShaderMaterial:
 	return mat
 
 
-static func _slab(root: Node3D, key: String, z0: int, z1: int, mat: Material) -> void:
+static func _slab(root: Node3D, key: String, z0: int, z1: int, mat: Material, ponds: Array) -> void:
 	var parts := key.split(":")
 	var x0 := int(parts[0])
 	var x1 := int(parts[1])
-	_box(root, Rect2(x0 * CELL, z0 * CELL, (x1 - x0) * CELL, (z1 - z0) * CELL), mat)
+	# 池塘不走一公尺的空洞格：透明水面下依原始輪廓精確挖除草地。
+	for area: Rect2 in Build.subtract_rects(Rect2(x0 * CELL, z0 * CELL, (x1 - x0) * CELL, (z1 - z0) * CELL), ponds):
+		_box(root, area, mat)
 
 
 static func _box(root: Node3D, r: Rect2, mat: Material) -> void:

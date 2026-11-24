@@ -58,7 +58,7 @@ func is_void(p: Vector2) -> bool:
 
 
 func populate(w: GameWorld) -> void:
-	w.add_child(SetPieces.water_fill(Rect2(-16, -48, 28, 96), -0.4, Vector2(0.15, 0.9)))
+	w.add_child(SetPieces.water_fill(Rect2(-16, -48, 28, 96), -0.4, Vector2(0.15, 0.9), Color("#123038"), Color("#2a5c60"), true))
 	w.place(SetPieces.plank_bridge(6.4, 2.5), Vector2(-2.0, 0.0))
 	var fall := w.place(SetPieces.waterfall(4.6, 3.4), Vector2(-10.0, -23.5))
 	w.add_child(AmbientLife.splash(fall.position + (fall.get_meta("splash") as Vector3) + Vector3(0, -0.3, 0), 4.6))

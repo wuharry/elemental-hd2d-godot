@@ -181,6 +181,7 @@ func set_time(time_name: String, instant: bool = false) -> void:
 	if instant:
 		_now = _to.duplicate()
 		_apply(_now)
+		_refresh_water_reflections()
 	changed.emit(time_name)
 
 
@@ -203,6 +204,13 @@ func _process(delta: float) -> void:
 		else:
 			_now[key] = lerpf(a, b, k)
 	_apply(_now)
+	if _t >= 1.0:
+		_refresh_water_reflections()
+
+
+func _refresh_water_reflections() -> void:
+	if is_inside_tree():
+		get_tree().call_group("water_reflections", "refresh")
 
 
 func _apply(p: Dictionary) -> void:

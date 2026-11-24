@@ -3,6 +3,32 @@ extends RefCounted
 ## 組裝小工具。尺寸一律寫進 mesh.size，不用 node scale（BLUEPRINT A6）。
 
 
+## 保留矩形扣掉所有洞口後的區域；不量化座標，輸出互不重疊的矩形。
+static func subtract_rects(area: Rect2, holes: Array) -> Array[Rect2]:
+	var pieces: Array[Rect2] = []
+	if not area.has_area():
+		return pieces
+	pieces.append(area)
+	for hole: Rect2 in holes:
+		var remaining: Array[Rect2] = []
+		for piece: Rect2 in pieces:
+			var cut := piece.intersection(hole)
+			if not cut.has_area():
+				remaining.append(piece)
+				continue
+			var strips := [
+				Rect2(piece.position.x, piece.position.y, piece.size.x, cut.position.y - piece.position.y),
+				Rect2(piece.position.x, cut.end.y, piece.size.x, piece.end.y - cut.end.y),
+				Rect2(piece.position.x, cut.position.y, cut.position.x - piece.position.x, cut.size.y),
+				Rect2(cut.end.x, cut.position.y, piece.end.x - cut.end.x, cut.size.y),
+			]
+			for strip: Rect2 in strips:
+				if strip.has_area():
+					remaining.append(strip)
+		pieces = remaining
+	return pieces
+
+
 static func box(parent: Node3D, size: Vector3, pos: Vector3, mat: Material, rot_deg: Vector3 = Vector3.ZERO) -> MeshInstance3D:
 	var mi := MeshInstance3D.new()
 	var mesh := BoxMesh.new()

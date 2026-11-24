@@ -12,6 +12,7 @@ extends Node3D
 const CAPTURE_WARMUP_FRAMES := 150
 const CAPTURE_SAMPLE_FRAMES := 120
 const CAPTURE_SETTLE_FRAMES := 70
+const CAPTURE_RENDER_SETTLE_FRAMES := 48
 const INTERACTION_RADIUS := 1.85
 const ALTAR_RADIUS := 1.25
 const GATE_CHARGE_SECONDS := 0.24
@@ -274,9 +275,10 @@ func _read_options(args: PackedStringArray) -> Dictionary:
 
 
 func _save_capture(path: String) -> bool:
-	# macOS 視窗被遮住時不一定送出 frame_post_draw；主動畫一幀再讀回，避免永遠等待。
-	RenderingServer.force_sync()
-	RenderingServer.force_draw(false)
+	# 被遮住的 macOS 視窗仍跑 process，但不一定繪圖。主動完成反射六面與霧的歷史幀再讀回。
+	for i in CAPTURE_RENDER_SETTLE_FRAMES:
+		RenderingServer.force_sync()
+		RenderingServer.force_draw(false)
 	var img := get_viewport().get_texture().get_image()
 	if img == null or img.is_empty() or img.save_png(path) != OK:
 		push_error("Could not save capture: " + path)

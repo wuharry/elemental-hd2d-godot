@@ -2,7 +2,23 @@
 
 規則看 [BLUEPRINT.md](BLUEPRINT.md)。這份記錄實際完成與驗證狀態；靜態截圖不能代替操作手感或手機實機測試。
 
-最後更新：2026-11-24（相連的六座元素祭壇與出戰格換裝）
+最後更新：2026-11-24（半透明水面、池底／河床深度與局部反射）
+
+## 清澈水面與真正的水底（2026-11-24）
+
+依 Harvey 要求，水保留藍綠色與波光，淺處可以看見水底，深處仍有厚度，不是全透明。材質從深度緩衝重建實際水深，不透明度限制在 48%–82%。池塘移除原本貼著水面的泥面與下方草地，改成約 0.26 公尺的淺灘、0.68 公尺的池底及少量水下石子。森林河床沿原有河道組裝，岸邊、中間過渡、中央分別約深 0.3／0.6／1.0 公尺；橋下也有連續河床。既有水位、岸線、橋與碰撞保留。
+
+池塘、河流、水道、井及水窪共用 `WaterSurface`。水片先做矩形聯集，材質只呈現方塊頂面，避免透明側面在內部接縫重複混色。半透明材質不走 SSR，改由局部反射探針提供附近景物與天空倒影；村莊／森林／雪原／地下城分別使用 1／3／0／4 個探針，捕捉時保留場景陰影，排除水自身和角色紙片。快取只在進場與日夜切換完成時更新，屬近似環境倒影，不能當成逐幀平面鏡射。
+
+`project.godot` 的唯一新增設定是反射圖集容量 8（原預設 64），不降低桌面反射解析度。Apple M4、Metal／Forward+ 的獨立單探針場景比較，這項配置少預留 427 MiB 紋理記憶體；不是整個遊戲的實機效能測量。截圖入口另主動繪製 48 幀再存圖，讓被遮住的 macOS 視窗也完成反射與霧的歷史幀更新。
+
+| 驗證項目 | 結果 |
+| --- | --- |
+| 水底、反射與場景回歸 | PASS。水底／反射 48 項、四場景風格 293 項、合批 15 項及截圖工具 6 項，均 0 FAIL。檢查包含池塘精確挖空、河床深淺、橋下連續性、反射拍攝點避開實體河岸／崖壁、日夜更新與場景釋放。匯入成功，程式審查無未解決問題。 |
+| 實際畫面 | PASS。用 `tools/capture.sh` 拍池塘、森林河流、地下城水道的晨／日／昏／夜共 12 張並逐張檢視；可見水底深淺、保留的水色及反光，沒有水片內側暗接縫。[池塘](screenshots/water_clear_pond_day.png)・[河流](screenshots/water_clear_river_day.png)・[地下城夜間反光](screenshots/water_reflection_dungeon_night.png)。退出警告見下方。 |
+| 手機實機 | NOT RUN。 |
+
+已知引擎警告：Godot 4.7.2／Metal 在使用反射探針後退出，會報 7 個 Texture RID 未釋放。原生 `ReflectionProbe` 最小場景也能重現；關閉探針陰影、先釋放場景並繪圖後退出，或連續建立／釋放三次，數量都維持 7。此警告尚未修復，不能把成功產圖寫成完全沒有警告。
 
 ## 靠近祭壇直接替換出戰格（2026-11-24）
 
@@ -198,7 +214,7 @@ One original full body playable chibi mage sprite, facing slightly right toward 
 - 樹冠鏤空不是全場物件透視；樹幹仍是實體，房屋遮擋尚未做，所有樹位逐棵巡查未做。
 - 地下城、雪原只看過開場位置與裂谷一個視角；整張地圖逐區巡查 NOT RUN。地下城的蝙蝠在近景是小黑方塊，還沒做翅膀細節。
 - 風格自動檢查管得到規則與數值範圍，管不到「好不好看」：構圖（S10）、細節密度（S11）仍要看圖。
-- 池塘反射仍受 SSR 視角限制，尚未特別強化。
+- 半透明水已使用局部快取反射；不反射角色紙片，沒有逐幀平面鏡射，手機實機成本尚未驗證。
 - 三個快捷槽仍只有外觀；長按護盾、副手輕點仍是提示，配方對應法術未定。
 - 敵人、傷害、環境狀態、友傷、救助／復活、多人未開始。
 - Threads 影片連結仍無法取得內容；本輪依 Harvey 提供與 repo 內的圖像參考，沒有宣稱看過影片。
@@ -222,12 +238,16 @@ godot --headless --path . --script res://tests/character_layers_test.gd
 godot --headless --path . --script res://tests/element_orbit_test.gd
 godot --headless --path . --script res://tests/style_test.gd
 godot --headless --path . --script res://tests/mesh_batch_test.gd
+godot --headless --path . --script res://tests/water_reflection_test.gd
 zsh tests/capture_test.sh
 tools/capture.sh
 for s in village forest snow dungeon; do tools/capture.sh --scene=$s --nohud --tag=$s; done
 godot --headless --path . --script res://tools/contact_sheet.gd   # 4 場景 × 4 時段總表，打開 test_output/contact_sheet.png 看
 tools/capture.sh --nohud --shots=day,dusk --tag=clean
 tools/capture.sh --nohud --pos=-7,4 --shots=day --tag=pond
+tools/capture.sh --nohud --pos=-7,10.8 --tag=water_final_pond
+tools/capture.sh --scene=forest --nohud --pos=1.5,3 --tag=water_final_forest
+tools/capture.sh --scene=dungeon --nohud --pos=-4,6 --tag=water_final_dungeon
 tools/capture.sh --scene=forest --nohud --shots=day --tag=forest
 tools/capture.sh --scene=snow --nohud --shots=day --tag=snow
 tools/capture.sh --scene=dungeon --nohud --shots=day --tag=dungeon
@@ -245,6 +265,7 @@ tools/capture.sh --nohud --pos=-13,3.1 --shots=day --tag=occlusion_off --no-reve
 | 新場景登錄、共用路徑規則 | `scenes.gd`、`scene_def.gd`；守則見 BLUEPRINT 第 8 節 |
 | 房屋、樹、道具、橋 | `house_builder.gd`、`tree_builder.gd`、`prop_builder.gd`、`set_pieces.gd` |
 | 所有場景的四時段光影 | `time_of_day.gd` 的 `PRESETS`（含 `scene_overrides`） |
+| 半透明水、反射與河床 | `water.gdshader`、`water_surface.gd`、`water_reflection.gd`、`river_bed.gd`；池底在 `PropBuilder.pond()` |
 | 貼圖與角色 | `tools/gen_textures.gd`、`tools/gen_character.gd`；重跑後匯入 |
 | 角色動畫／瞄準 | `src/player/player.gd` |
 | 手持武器外觀與握點 | `src/player/held_weapon.gd`、`weapon_visual.gd`、`assets/weapons/amber_staff.tres` |

@@ -4,25 +4,24 @@ extends RefCounted
 ## 規則同 PropBuilder：只用方塊與三角柱、材質只從 Mats 拿、尺寸寫進 mesh.size（BLUEPRINT A3、A6）。
 
 const IRON := Color("#26262c")
+const Water := preload("res://src/world/water_surface.gd")
+const RiverBed := preload("res://src/world/river_bed.gd")
 
 
 static func water_mat(flow: Vector2 = Vector2.ZERO, deep: Color = Color("#123038"), shallow: Color = Color("#2a5c60")) -> ShaderMaterial:
-	var m := ShaderMaterial.new()
-	m.shader = load("res://shaders/water.gdshader")
-	m.set_shader_parameter("normal_tex", Mats.tex("water_n"))
-	m.set_shader_parameter("flow", flow)
-	m.set_shader_parameter("deep", deep)
-	m.set_shader_parameter("shallow", shallow)
-	return m
+	return Water.material(flow, deep, shallow)
 
 
 ## 填滿空洞的水：在空洞範圍底下鋪一大片水面與河床。rect 要蓋住整條河（空洞以外的部分會被地面擋住）。
-static func water_fill(rect: Rect2, level: float, flow: Vector2, deep: Color = Color("#123038"), shallow: Color = Color("#2a5c60")) -> Node3D:
+static func water_fill(rect: Rect2, level: float, flow: Vector2, deep: Color = Color("#123038"), shallow: Color = Color("#2a5c60"), natural_bed := false) -> Node3D:
 	var root := Node3D.new()
 	var c := rect.get_center()
-	var water := Build.box(root, Vector3(rect.size.x, 0.1, rect.size.y), Vector3(c.x, level - 0.05, c.y), water_mat(flow, deep, shallow))
-	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	Build.box(root, Vector3(rect.size.x, 0.4, rect.size.y), Vector3(c.x, level - 1.0, c.y), Mats.tri("dirt", Color("#6a6258")))
+	Water.add_surface(root, [rect], level, 0.1, water_mat(flow, deep, shallow))
+	Water.add_reflections(root, [rect], level, true)
+	var bed_center := level - 1.4 if natural_bed else level - 1.0
+	Build.box(root, Vector3(rect.size.x, 0.4, rect.size.y), Vector3(c.x, bed_center, c.y), Mats.tri("dirt", Color("#6a6258")))
+	if natural_bed:
+		root.ready.connect(RiverBed.build.bind(root, rect, level), CONNECT_ONE_SHOT)
 	return root
 
 
@@ -523,10 +522,12 @@ static func sarcophagus(lid_offset: float) -> Node3D:
 ## 地上的水窪：薄薄一層反光水面。
 static func puddle(size: Vector2) -> Node3D:
 	var root := Node3D.new()
-	var water := Build.box(root, Vector3(size.x, 0.02, size.y), Vector3(0, 0.012, 0), water_mat(Vector2.ZERO, Color("#151a26"), Color("#2c3646")))
-	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var half := size * 0.5
-	Build.box(root, Vector3(size.x * 0.5, 0.02, size.y * 0.4), Vector3(half.x * 0.6, 0.012, -half.y * 0.5), water.material_override)
+	var second_size := size * Vector2(0.5, 0.4)
+	var second_center := half * Vector2(0.6, -0.5)
+	Water.add_surface(root, [Rect2(-half, size), Rect2(second_center - second_size * 0.5, second_size)],
+		0.022, 0.02, water_mat(Vector2.ZERO, Color("#151a26"), Color("#2c3646")))
+	Water.share_reflection(root, [Rect2(-half, size), Rect2(second_center - second_size * 0.5, second_size)], 0.022)
 	return root
 
 

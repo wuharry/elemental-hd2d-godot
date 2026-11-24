@@ -34,6 +34,8 @@
 - Renderer：Forward+（體積霧、SSAO、SSIL、SSR 只有它有）。**手機是主要平台，Mobile renderer 沒有這幾項**；降級方案尚未做，列在 HANDOFF 的待辦。
 - 鏡頭：`Camera3D` FOV 25°、俯角 33°、水平轉 22°、距離 30 公尺；`CameraAttributesPractical` 開近、遠兩段景深，對焦在角色前後約 4 公尺。數值是 `camera_rig.gd` 的 `@export`。
 - 後製：ACES tonemap、glow、SSAO、SSIL、體積霧、少量色彩調整。數值在 `time_of_day.gd`。
+- 水面：保留藍綠水色的半透明清水，依實際水底深度由 48% 至 82% 不透明度漸變；岸邊看得見淺灘，深處仍有水的厚度。池塘與河流使用真正下沉的水底，不能把貼近水面的泥地當成深水。
+- 水面倒影由 `WaterSurface` 建立的局部 `ReflectionProbe` 提供。半透明水不依賴 SSR；探針只捕捉場景，排除角色紙片與水面自身，只影響水層，日夜切換完成後更新一次。反射圖集上限 8，避免預留不必要的記憶體。這是局部近似倒影，不能宣稱等同逐幀平面鏡射或手機效能已驗收。
 
 ## 4. 架構
 
@@ -82,6 +84,7 @@ godot --headless --path . --script res://tests/character_layers_test.gd # 逐格
 godot --headless --path . --script res://tests/element_orbit_test.gd # 佇列狀態與角色周身光點
 godot --headless --path . --script res://tests/style_test.gd      # 四場景組裝與切換 + 逐場景硬規則（第 2、8 節；不是視覺驗收）
 godot --headless --path . --script res://tests/mesh_batch_test.gd # 合併前後幾何與材質資料
+godot --headless --path . --script res://tests/water_reflection_test.gd # 水底、反射覆蓋及日夜／場景切換
 zsh tests/capture_test.sh                                       # 缺圖、舊圖、失敗、逾時必須回報失敗
 tools/capture.sh                                                  # 開視窗拍四個時段到 test_output/（可加 --scene=、--nohud、--pos=x,z、--shots=day,night、--tag=名稱）
 godot --headless --path . --script res://tools/contact_sheet.gd   # 場景 × 時段總表 test_output/contact_sheet.png（先用 --tag=<場景> 拍齊）
