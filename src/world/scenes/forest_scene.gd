@@ -5,21 +5,32 @@ extends SceneDef
 const RIVER := [Vector2(-10, -48), Vector2(-10, -22), Vector2(-6, -12), Vector2(-2, -6), Vector2(-2, 6), Vector2(2, 12), Vector2(6, 20), Vector2(6, 48)]
 const RIVER_HALF := 2.3
 const CAMP := Vector2(8.0, 5.5)
-const SHRINE := Vector2(9.5, -11.0)
+const SHRINE := Vector2(9.5, -10.6)
+const ALTAR_ORDER := [Elements.Type.WATER, Elements.Type.ICE, Elements.Type.EARTH,
+	Elements.Type.ARCANE, Elements.Type.FIRE, Elements.Type.LIGHTNING]
+const ALTAR_SPACING := 1.60
+const ALTAR_STAND_OFFSET := Vector2(0, 1.95)
 
 
 func _init() -> void:
 	id = "forest"
 	title = "森林河谷"
 	player_start = Vector3(4.0, 0.0, 1.2)
-	interactions = {"equip": SHRINE + Vector2(0, 2.2), "to_village": Vector2(5.4, -8.7)}
+	interactions = {"to_village": Vector2(2.1, -9.8)}
+	for i in ALTAR_ORDER.size():
+		var offset := (i - (ALTAR_ORDER.size() - 1) * 0.5) * ALTAR_SPACING
+		element_altars[ALTAR_ORDER[i]] = SHRINE + Vector2(offset, 0) + ALTAR_STAND_OFFSET
 	play_half = Vector2(30.0, 19.0)
+	var aisle_left: Vector2 = element_altars[ALTAR_ORDER.front()]
+	var aisle_right: Vector2 = element_altars[ALTAR_ORDER.back()]
 	paths = [
 		{"pts": [Vector2(-40, 2), Vector2(-16, 1), Vector2(-5, 0), Vector2(1, 0), Vector2(10, -1.5), Vector2(22, -3), Vector2(40, -2)], "width": 2.2},
-		{"pts": [Vector2(10, -1.5), Vector2(11, -6), Vector2(9.5, -9.5)], "width": 1.6},
-		{"pts": [interactions["to_village"], interactions["equip"]], "width": 1.8},
+		{"pts": [Vector2(10, -1.5), Vector2(11, -6), SHRINE + ALTAR_STAND_OFFSET], "width": 1.6},
+		{"pts": [interactions["to_village"], aisle_left, aisle_right], "width": 2.2},
 	]
-	dirt_spots = [{"c": CAMP, "r": 2.6}, {"c": SHRINE, "r": 2.8}, {"c": interactions["to_village"], "r": 2.2}]
+	dirt_spots = [{"c": CAMP, "r": 2.6}, {"c": interactions["to_village"], "r": 2.2}]
+	for stand: Vector2 in element_altars.values():
+		dirt_spots.append({"c": stand - ALTAR_STAND_OFFSET, "r": 2.5})
 	bridges = [Rect2(-5.0, -1.25, 6.0, 2.5)]
 	ground = {
 		"base": "grass_ground", "base_tint": Color("#cfe0b4"),
@@ -90,9 +101,13 @@ func populate(w: GameWorld) -> void:
 	w.place(SetPieces.fallen_log(3.2), Vector2(6.5, -4.5), 28.0)
 	w.place(SetPieces.fallen_log(2.6), Vector2(-9.5, 5.0), -40.0)
 	w.place(SetPieces.fallen_log(3.6), Vector2(16.5, 4.0), 75.0)
-	w.place(SetPieces.ruin_arch(), SHRINE + Vector2(0, -1.0), -8.0)
-	w.place(SetPieces.element_altar(), SHRINE + Vector2(0, 0.6))
-	w.place(SetPieces.waygate(), interactions["to_village"], 48.0)
+	w.place(SetPieces.ruin_arch(), SHRINE + Vector2(0, -1.85), -8.0)
+	w.place(SetPieces.element_altar_base(ALTAR_ORDER.size() * ALTAR_SPACING), SHRINE)
+	for element: int in element_altars:
+		w.place(SetPieces.element_altar(element), element_altars[element] - ALTAR_STAND_OFFSET)
+	var gate: Vector2 = interactions["to_village"]
+	var approach := gate.direction_to(element_altars[ALTAR_ORDER.front()])
+	w.place(SetPieces.waygate(), gate, rad_to_deg(atan2(approach.x, approach.y)))
 	w.place(SetPieces.tent(Color("#c9b48a")), CAMP + Vector2(2.4, 1.2), -28.0)
 	w.place(PropBuilder.campfire(), CAMP + Vector2(-1.0, -0.6))
 	w.place(PropBuilder.crate(0.7), CAMP + Vector2(1.0, -2.4), 20.0)

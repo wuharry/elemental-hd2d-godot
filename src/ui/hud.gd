@@ -4,6 +4,7 @@ extends CanvasLayer
 ## 這裡只把操作轉成對 Player／ElementQueue 的呼叫，不放任何玩法規則。
 
 signal interaction_requested
+signal element_replacement_requested(slot: int, element: int)
 
 ## DRAFT：內圈佔搖桿半徑的比例，需要實機測試後才定（規則文件第 5 節）。
 const AIM_INNER_RATIO := 0.55
@@ -11,7 +12,6 @@ const LONG_PRESS_SEC := 0.35
 const ELEMENT_ICONS: Texture2D = preload("res://assets/ui/element_icons.png")
 const INTERACTION_LABELS := {
 	"to_altar": "進入祭壇",
-	"equip": "裝備元素",
 	"to_village": "返回村莊",
 }
 
@@ -26,8 +26,8 @@ var _widgets: Array[Dictionary] = []
 var _touches: Dictionary = {}
 var _toast := ""
 var _toast_time := 0.0
-var _draft_loadout: Array = []
 var _interaction := ""
+var _altar_element := -1
 var _interact_widget: Dictionary = {}
 
 
@@ -43,6 +43,7 @@ func setup(player: Player, rig: CameraRig, tod: TimeOfDay) -> void:
 	_canvas.draw.connect(_draw_hud)
 	add_child(_canvas)
 	_player.queue.changed.connect(_canvas.queue_redraw.unbind(1))
+	_player.loadout_changed.connect(_canvas.queue_redraw)
 	_tod.changed.connect(_canvas.queue_redraw.unbind(1))
 	get_viewport().size_changed.connect(_layout)
 	set_process(false)
@@ -56,22 +57,13 @@ func _layout() -> void:
 	_interact_widget = {}
 	_player.move_input = Vector2.ZERO
 	_player.aim_input = Vector2.ZERO
-	if _player.choosing_loadout:
-		var center := size * 0.5
-		for i in Elements.SELECTABLE.size():
-			var offset := Vector2((i % 3 - 1) * 178.0, -131.0 if i < 3 else 29.0)
-			_widgets.append({"kind": "loadout_option", "c": center + offset, "r": 54.0, "element": Elements.SELECTABLE[i]})
-		_widgets.append({"kind": "loadout_cancel", "c": center + Vector2(-126, 218), "extent": Vector2(104, 38)})
-		_widgets.append({"kind": "loadout_apply", "c": center + Vector2(126, 218), "extent": Vector2(104, 38)})
-		_canvas.queue_redraw()
-		return
 	var move_c := Vector2(230, size.y - 230)
 	var aim_c := Vector2(size.x - 320, size.y - 270)
 	var angles := [125.0, 160.0, 195.0, 230.0]
 	for i in _player.loadout.size():
 		var a := deg_to_rad(angles[i])
 		var c := aim_c + Vector2(cos(a), -sin(a)) * 228.0
-		_widgets.append({"kind": "element", "c": c, "r": 54.0, "element": _player.loadout[i]})
+		_widgets.append({"kind": "element", "c": c, "r": 54.0, "slot": i})
 	var fa := deg_to_rad(58.0)
 	_widgets.append({"kind": "fuse", "c": aim_c + Vector2(cos(fa), -sin(fa)) * 215.0, "r": 58.0})
 	for i in 3:
@@ -87,16 +79,17 @@ func _layout() -> void:
 
 
 ## 移動穿過互動邊界時，只撤換屬於舊地點的按鍵與觸控，讓搖桿持續跟著手指。
-func set_interaction(action: String) -> void:
-	if action == _interaction:
-		return
-	_interaction = action
-	if not is_instance_valid(_canvas):
-		return
-	if _player.choosing_loadout and action != "equip":
-		close_loadout()
-	else:
+func set_interaction(action: String, altar_element: int) -> void:
+	if action != _interaction:
+		_interaction = action
 		_update_interact_widget()
+		_canvas.queue_redraw()
+	if altar_element != _altar_element:
+		_altar_element = altar_element
+		# 取消舊祭壇上的點按，保留正在推動的搖桿。
+		for i: int in _touches.keys():
+			if _touches[i]["kind"] == "element":
+				_touches.erase(i)
 		_canvas.queue_redraw()
 
 
@@ -107,7 +100,7 @@ func _update_interact_widget() -> void:
 			if _touches[i] == _interact_widget:
 				_touches.erase(i)
 		_interact_widget = {}
-	if _player.choosing_loadout or not INTERACTION_LABELS.has(_interaction):
+	if not INTERACTION_LABELS.has(_interaction):
 		return
 	var size := get_viewport().get_visible_rect().size
 	_interact_widget = {"kind": "interact", "c": size - Vector2(165, 81), "extent": Vector2(119, 42)}
@@ -123,11 +116,7 @@ func _process(delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if _player.choosing_loadout and event is InputEventKey:
-		if event.pressed and event.physical_keycode == KEY_ESCAPE:
-			close_loadout()
-		get_viewport().set_input_as_handled()
-	elif event is InputEventScreenTouch:
+	if event is InputEventScreenTouch:
 		var touch := event as InputEventScreenTouch
 		if touch.pressed:
 			_press(touch.index, touch.position)
@@ -196,7 +185,7 @@ func _release(index: int, pos: Vector2) -> void:
 	var w: Dictionary = _touches[index]
 	_touches.erase(index)
 	_canvas.queue_redraw()
-	if (w["kind"].begins_with("loadout_") or w["kind"] == "interact") and not _contains_point(w, pos):
+	if w["kind"] == "interact" and not _contains_point(w, pos):
 		return
 	var held := (Time.get_ticks_msec() - int(w["t0"])) / 1000.0
 	match w["kind"]:
@@ -216,9 +205,14 @@ func _release(index: int, pos: Vector2) -> void:
 				else:
 					_player.cast_queue(_to_world(v))
 		"element":
-			if held >= LONG_PRESS_SEC:
-				_say("%s盾：規則待定，尚未實作" % Elements.display_name(w["element"]))
-			elif not _player.queue.add(w["element"]):
+			var slot: int = w["slot"]
+			var element: int = _player.loadout[slot]
+			if _altar_element >= 0:
+				if _contains_point(w, pos):
+					element_replacement_requested.emit(slot, _altar_element)
+			elif held >= LONG_PRESS_SEC:
+				_say("%s盾：規則待定，尚未實作" % Elements.display_name(element))
+			elif not _player.queue.add(element):
 				_say("佇列已滿（四格）")
 		"fuse":
 			if not _player.queue.fuse_last_two():
@@ -229,31 +223,6 @@ func _release(index: int, pos: Vector2) -> void:
 			_tod.set_time(w["time"])
 		"interact":
 			interaction_requested.emit()
-		"loadout_option":
-			var element: int = w["element"]
-			if _draft_loadout.has(element):
-				_draft_loadout.erase(element)
-			elif _draft_loadout.size() < Elements.LOADOUT.size():
-				_draft_loadout.append(element)
-		"loadout_cancel":
-			close_loadout()
-		"loadout_apply":
-			if _draft_loadout.size() == Elements.LOADOUT.size():
-				_player.loadout.assign(_draft_loadout)
-				close_loadout()
-
-
-func open_loadout() -> void:
-	if _interaction != "equip" or _player.choosing_loadout:
-		return
-	_draft_loadout.assign(_player.loadout)
-	_player.choosing_loadout = true
-	_layout()
-
-
-func close_loadout() -> void:
-	_player.choosing_loadout = false
-	_layout()
 
 
 ## 搖桿向量（螢幕方向）→ 世界水平方向。
@@ -271,9 +240,9 @@ func _say(text: String) -> void:
 # ---------- 繪製 ----------
 
 func _draw_hud() -> void:
-	if _player.choosing_loadout:
-		_draw_loadout()
-		return
+	var equipped_slot := _player.loadout.find(_altar_element)
+	if _altar_element >= 0:
+		_draw_altar_hint(equipped_slot)
 	for w in _widgets:
 		match w["kind"]:
 			"move":
@@ -281,7 +250,7 @@ func _draw_hud() -> void:
 			"aim":
 				_draw_stick(w, AIM_INNER_RATIO)
 			"element":
-				_draw_element_button(w)
+				_draw_element_button(w, _altar_element >= 0 and (equipped_slot < 0 or equipped_slot == w["slot"]))
 			"fuse":
 				_draw_fusion(w)
 			"quick":
@@ -358,17 +327,6 @@ func _draw_action_icon(kind: String, c: Vector2, tint: Color) -> void:
 				Vector2(16, -21), Vector2(21, -16), Vector2(21, 20), Vector2(-5, 20), Vector2(-5, 10)]), tint, 4)
 			_canvas.draw_line(Vector2(-21, 0), Vector2(9, 0), tint, 5)
 			_canvas.draw_polyline(PackedVector2Array([Vector2(1, -8), Vector2(9, 0), Vector2(1, 8)]), tint, 5)
-		"equip":
-			_canvas.draw_colored_polygon(PackedVector2Array([Vector2(0, -23), Vector2(11, -11),
-				Vector2(0, 3), Vector2(-11, -11)]), tint)
-			_canvas.draw_rect(Rect2(-16, 7, 32, 5), tint)
-			_canvas.draw_rect(Rect2(-10, 12, 20, 5), tint)
-			_canvas.draw_rect(Rect2(-21, 17, 42, 5), tint)
-		"loadout_cancel":
-			_canvas.draw_line(Vector2(-11, -11), Vector2(11, 11), tint, 5)
-			_canvas.draw_line(Vector2(-11, 11), Vector2(11, -11), tint, 5)
-		"loadout_apply":
-			_canvas.draw_polyline(PackedVector2Array([Vector2(-15, 0), Vector2(-4, 11), Vector2(16, -12)]), tint, 6)
 		"locked":
 			_canvas.draw_polyline(PackedVector2Array([Vector2(-9, 0), Vector2(-9, -10), Vector2(-5, -15),
 				Vector2(5, -15), Vector2(9, -10), Vector2(9, 0)]), tint, 4)
@@ -388,46 +346,32 @@ func _draw_tablet(w: Dictionary, icon: String, label: String, body: Color, rim: 
 	_draw_label(center + Vector2(28, 0), label, 29)
 
 
-func _draw_loadout() -> void:
-	var size := get_viewport().get_visible_rect().size
-	var center := size * 0.5
-	var panel := Rect2(center - Vector2(336, 282), Vector2(672, 564))
-	_canvas.draw_rect(Rect2(Vector2.ZERO, size), Color(0.05, 0.04, 0.08, 0.58))
-	_canvas.draw_rect(panel, Color("#211c2a"))
-	_canvas.draw_rect(panel, Color("#bc9e75"), false, 3.0)
-	_canvas.draw_rect(panel.grow(-9.0), Color("#5d4d53"), false, 2.0)
-	_draw_label(center + Vector2(-156, -238), "元素祭壇", 40)
-	_draw_label(center + Vector2(169, -235), "出戰  %d／%d" % [_draft_loadout.size(), Elements.LOADOUT.size()], 30)
-	var hint := "先取消一種，再換入其他元素" if _draft_loadout.size() == Elements.LOADOUT.size() else "選滿四種即可確定"
-	_draw_label(center + Vector2(0, -199), hint, 24)
-	for w in _widgets:
-		match w["kind"]:
-			"loadout_option":
-				var element: int = w["element"]
-				var position: Vector2 = w["c"]
-				var slot := _draft_loadout.find(element)
-				_draw_element_button(w, slot >= 0 or _draft_loadout.size() < Elements.LOADOUT.size())
-				if slot >= 0:
-					var badge := position + Vector2(40, -39)
-					_canvas.draw_circle(badge, 19.0, Color("#342648"))
-					_draw_label(badge, str(slot + 1), 24)
-				_draw_label(position + Vector2(0, 76), Elements.display_name(element), 27)
-			"loadout_cancel":
-				_draw_tablet(w, "loadout_cancel", "取消", Color("#342e40"), Color("#ac9bae"))
-			"loadout_apply":
-				var ready := _draft_loadout.size() == Elements.LOADOUT.size()
-				_draw_tablet(w, "loadout_apply", "裝備", Color("#574157") if ready else Color("#302b34"),
-					Color("#e5c58b") if ready else Color("#595360"))
+func _draw_altar_hint(equipped_slot: int) -> void:
+	var center := get_viewport().get_visible_rect().size - Vector2(765, 143)
+	var rect := Rect2(center - Vector2(155, 48), Vector2(310, 96))
+	var rim := Elements.color(_altar_element).lightened(0.32)
+	_canvas.draw_rect(rect, Color("#211c2a"))
+	_canvas.draw_rect(rect, rim, false, 3.0)
+	_draw_element_icon(_altar_element, center + Vector2(-104, 0), 3.0)
+	_draw_label(center + Vector2(33, -17), "%s祭壇" % Elements.display_name(_altar_element), 29)
+	var hint := "點亮起的格子替換" if equipped_slot < 0 else "已裝備"
+	_draw_label(center + Vector2(33, 19), hint, 25)
 
 
-func _draw_element_button(w: Dictionary, active := true) -> void:
-	var element: int = w["element"]
-	var col := Elements.color(element)
-	_draw_button_face(w, col if active else col.darkened(0.45))
+func _draw_element_button(w: Dictionary, highlighted: bool) -> void:
+	var element: int = _player.loadout[w["slot"]]
+	var center: Vector2 = w["c"]
+	_draw_button_face(w, Elements.color(element))
+	if highlighted:
+		var rim := Elements.color(_altar_element).lightened(0.48)
+		_canvas.draw_arc(center, w["r"] + 5.0, 0, TAU, 48, rim, 4.0, true)
+	_draw_element_icon(element, center, 4.0)
+
+
+func _draw_element_icon(element: int, center: Vector2, magnification: float) -> void:
 	# 圖集一格對應一種基礎元素；以整數倍放大，貼齊畫布像素。
 	var tile := Vector2.ONE * ELEMENT_ICONS.get_height()
-	var size := tile * 4.0
-	var center: Vector2 = w["c"]
+	var size := tile * magnification
 	var dst := Rect2((center - size * 0.5).round(), size)
 	var src := Rect2(Vector2(Elements.ICON_ORDER.find(element) * tile.x, 0), tile)
 	_canvas.draw_texture_rect_region(ELEMENT_ICONS, dst, src)

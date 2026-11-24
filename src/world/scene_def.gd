@@ -17,6 +17,8 @@ var world_size := 96.0
 var player_start := Vector3.ZERO
 ## 玩家可站立並觸發互動的位置（XZ，公尺），也供場景擺件與傳送落點共用。
 var interactions: Dictionary = {}
+## 元素 ID → 祭壇前的可互動站位（XZ）。
+var element_altars: Dictionary[int, Vector2] = {}
 ## 玩家可走的範圍（中心 0,0）。
 var play_half := Vector2(30.0, 17.0)
 

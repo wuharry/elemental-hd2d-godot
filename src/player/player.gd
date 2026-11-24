@@ -4,6 +4,7 @@ extends CharacterBody3D
 ## 移動方向由外部塞進 move_input（HUD 搖桿或鍵盤），這裡不直接讀觸控。
 
 signal cast(elements: Array[int], origin: Vector3, direction: Vector3)
+signal loadout_changed
 
 const SPEED := 5.2
 const CharacterAnimation := preload("res://src/player/character_animation.gd")
@@ -31,7 +32,6 @@ const BREATH_PERIOD := 0.8
 
 var queue := ElementQueue.new()
 var loadout := Elements.LOADOUT.duplicate()
-var choosing_loadout := false
 ## 搖桿輸入，x 右、y 下（螢幕方向），長度 0..1。
 var move_input := Vector2.ZERO
 ## 右搖桿的螢幕方向；非零時瞄準優先於移動面向。
@@ -121,15 +121,20 @@ func _ready() -> void:
 	_refresh_sprite()
 
 
+func replace_element(slot: int, element: int) -> void:
+	if slot < 0 or slot >= loadout.size() or not Elements.SELECTABLE.has(element) or loadout.has(element):
+		return
+	loadout[slot] = element
+	loadout_changed.emit()
+
+
 func _physics_process(delta: float) -> void:
 	_t += delta
 	var input := move_input
 	var kb := Vector2(
 		float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
 		float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W)))
-	if choosing_loadout:
-		input = Vector2.ZERO
-	elif kb != Vector2.ZERO:
+	if kb != Vector2.ZERO:
 		input = kb.normalized()
 	var dir := Vector3(input.x, 0, input.y).rotated(Vector3.UP, camera_yaw)
 	velocity.x = dir.x * SPEED

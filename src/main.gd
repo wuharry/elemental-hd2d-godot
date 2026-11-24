@@ -7,11 +7,13 @@ extends Node3D
 ##   --pos=x,z   指定角色起點（檢查村莊其他角落用）
 ##   --shots=day,night  搭配 --capture，只拍指定時段；檔名加上 --tag=名稱 區分
 ##   --scene=forest  場景：village／forest／snow／dungeon；F5–F8 也能切換
+##   --altar-preview  搭配 --capture，拍攝靠近土祭壇時的提示
 
 const CAPTURE_WARMUP_FRAMES := 150
 const CAPTURE_SAMPLE_FRAMES := 120
 const CAPTURE_SETTLE_FRAMES := 70
 const INTERACTION_RADIUS := 1.85
+const ALTAR_RADIUS := 1.25
 const GATE_CHARGE_SECONDS := 0.24
 
 var world: GameWorld
@@ -31,7 +33,7 @@ func _ready() -> void:
 		get_tree().quit(2)
 		return
 
-	var preview_altar := args.has("--capture") and args.has("--loadout-menu")
+	var preview_altar: bool = args.has("--capture") and _options.has("altar_preview")
 	var def := Scenes.make("forest" if preview_altar else _options["scene"])
 	world = GameWorld.new(def)
 	add_child(world)
@@ -58,9 +60,10 @@ func _ready() -> void:
 		add_child(hud)
 		hud.call("setup", player, rig, time_of_day)
 		hud.interaction_requested.connect(interact)
+		hud.element_replacement_requested.connect(_replace_at_altar)
 
 	if preview_altar:
-		_place_at_interaction("equip")
+		_place_player(def.element_altars[Elements.Type.EARTH])
 	elif _options.has("pos"):
 		player.position = _options["pos"]
 		rig.global_position = player.position + rig.look_offset
@@ -93,15 +96,39 @@ func _nearest_interaction() -> String:
 
 
 func _update_interaction() -> void:
-	var action := _nearest_interaction()
-	if action != _nearby_action:
-		_nearby_action = action
-		if hud:
-			hud.set_interaction(action)
+	_nearby_action = _nearest_interaction()
+	if hud:
+		hud.set_interaction(_nearby_action, _nearest_altar())
+
+
+func _nearest_altar() -> int:
+	var at := Vector2(player.position.x, player.position.z)
+	var nearest := -1
+	var distance_limit := ALTAR_RADIUS * ALTAR_RADIUS
+	for element: int in world.def.element_altars:
+		var distance := at.distance_squared_to(world.def.element_altars[element])
+		if distance <= distance_limit:
+			nearest = element
+			distance_limit = distance
+	return nearest
+
+
+func _replace_at_altar(slot: int, element: int) -> void:
+	# 放開按鍵時再確認位置，避免邊走邊按時換成已離開的祭壇元素。
+	if not _gate_charging and _nearest_altar() == element:
+		player.replace_element(slot, element)
+
+
+func _use_element_slot(slot: int) -> void:
+	var element := _nearest_altar()
+	if element >= 0:
+		_replace_at_altar(slot, element)
+	else:
+		player.queue.add(player.loadout[slot])
 
 
 func interact() -> void:
-	if player.choosing_loadout or _gate_charging:
+	if _gate_charging:
 		return
 	# 另一根手指可能仍在推搖桿；放開互動鍵時再核對位置。
 	if _nearest_interaction() != _nearby_action:
@@ -110,9 +137,6 @@ func interact() -> void:
 	match _nearby_action:
 		"to_altar", "to_village":
 			_travel_through_gate(_nearby_action)
-		"equip":
-			if hud:
-				hud.open_loadout()
 
 
 func _travel_through_gate(action: String) -> void:
@@ -121,7 +145,7 @@ func _travel_through_gate(action: String) -> void:
 	await get_tree().create_timer(GATE_CHARGE_SECONDS).timeout
 	if action == "to_altar":
 		switch_scene("forest")
-		_place_at_interaction("equip")
+		_place_player(world.def.element_altars[Elements.Type.EARTH])
 	else:
 		switch_scene("village")
 		_place_at_interaction("to_altar", 1.3)
@@ -133,7 +157,10 @@ func _travel_through_gate(action: String) -> void:
 func _place_at_interaction(action: String, toward_spawn: float = 0.0) -> void:
 	var point: Vector2 = world.def.interactions[action]
 	var spawn := Vector2(world.def.player_start.x, world.def.player_start.z)
-	point += point.direction_to(spawn) * toward_spawn
+	_place_player(point + point.direction_to(spawn) * toward_spawn)
+
+
+func _place_player(point: Vector2) -> void:
 	player.position = Vector3(point.x, world.def.player_start.y, point.y)
 	rig.global_position = player.position + rig.look_offset
 
@@ -165,7 +192,7 @@ func _batch_world() -> void:
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
-	if key == null or not key.pressed or key.echo or player.choosing_loadout or _gate_charging:
+	if key == null or not key.pressed or key.echo or _gate_charging:
 		return
 	match key.physical_keycode:
 		KEY_F1: time_of_day.set_time("morning")
@@ -178,10 +205,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		KEY_F8: switch_scene("dungeon")
 		KEY_T: time_of_day.next_time()
 		KEY_E: interact()
-		KEY_1: player.queue.add(player.loadout[0])
-		KEY_2: player.queue.add(player.loadout[1])
-		KEY_3: player.queue.add(player.loadout[2])
-		KEY_4: player.queue.add(player.loadout[3])
+		KEY_1: _use_element_slot(0)
+		KEY_2: _use_element_slot(1)
+		KEY_3: _use_element_slot(2)
+		KEY_4: _use_element_slot(3)
 		KEY_F: player.queue.fuse_last_two()
 		KEY_SPACE: player.cast_queue(player.aim_dir)
 		KEY_ESCAPE: get_tree().quit()
@@ -202,7 +229,10 @@ func _read_options(args: PackedStringArray) -> Dictionary:
 	var safe_tag := RegEx.new()
 	safe_tag.compile("^[A-Za-z0-9_-]+$")
 	for arg in args:
-		if arg in ["--capture", "--nohud", "--no-batching", "--no-reveal", "--loadout-menu"]:
+		if arg in ["--altar-preview", "--loadout-menu"]:
+			options["altar_preview"] = true
+			continue
+		if arg in ["--capture", "--nohud", "--no-batching", "--no-reveal"]:
 			continue
 		var pair := arg.split("=", true, 1)
 		if pair.size() != 2:
@@ -286,13 +316,10 @@ func _capture_all() -> void:
 		ms, float(total_draw_calls) / CAPTURE_SAMPLE_FRAMES, CAPTURE_SAMPLE_FRAMES])
 	var shots: Array = _options["shots"]
 	var tag: String = "_" + _options["tag"] if not _options["tag"].is_empty() else ""
-	var show_loadout := hud != null and OS.get_cmdline_user_args().has("--loadout-menu")
-	if show_loadout:
-		interact()
-		if not player.choosing_loadout:
-			push_error("Loadout capture could not open the elemental altar")
-			get_tree().quit(1)
-			return
+	if _options.has("altar_preview") and _nearest_altar() != Elements.Type.EARTH:
+		push_error("Altar capture did not reach the earth altar")
+		get_tree().quit(1)
+		return
 	for time_name in shots:
 		time_of_day.set_time(time_name, true)
 		for i in CAPTURE_SETTLE_FRAMES:
@@ -300,8 +327,6 @@ func _capture_all() -> void:
 		var path := "%s/shot_%s%s.png" % [dir, time_name, tag]
 		if not _save_capture(path):
 			return
-	if show_loadout:
-		hud.close_loadout()
 	if not tag.is_empty():
 		get_tree().quit()
 		return

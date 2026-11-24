@@ -327,30 +327,44 @@ static func waygate() -> Node3D:
 	return root
 
 
-## 六顆寶石圍繞一顆旋轉的雙錐形晶石，與旁邊能穿過的門環形狀不同。
-static func element_altar() -> Node3D:
+## 六座祭壇共用的連續石座。
+static func element_altar_base(width: float) -> Node3D:
 	var root := Node3D.new()
-	root.name = "ElementAltar"
-	var plinth := Mats.tri("flagstone", Color("#918b9b"))
+	root.name = "ElementAltarBase"
+	var stone := Mats.tri("flagstone", Color("#918b9b"))
+	Build.box(root, Vector3(width, 0.12, 1.65), Vector3(0, 0.06, 0), stone)
+	Build.box(root, Vector3(width - 0.12, 0.10, 1.38), Vector3(0, 0.17, 0), stone)
+	Build.collider(root, Vector3(width, 0.20, 1.63), Vector3(0, 0.10, 0))
+	return root
+
+
+static func element_altar(element: int) -> Node3D:
+	var root := Node3D.new()
+	root.name = "ElementAltar_%d" % element
+	var color := Elements.color(element)
+	var stone := Mats.tri("flagstone", Color("#918b9b"))
 	var trim := Mats.metal(Color("#be995e"))
-	Build.box(root, Vector3(2.8, 0.18, 1.74), Vector3(0, 0.09, 0), plinth)
-	Build.box(root, Vector3(2.14, 0.48, 1.28), Vector3(0, 0.42, 0), Mats.tri("brick", Color("#716882")))
-	Build.box(root, Vector3(2.42, 0.07, 1.43), Vector3(0, 0.69, 0), trim)
-	Build.box(root, Vector3(2.60, 0.15, 1.59), Vector3(0, 0.80, 0), plinth)
-	Build.collider(root, Vector3(2.72, 0.88, 1.66), Vector3(0, 0.44, 0))
-	for i in Elements.SELECTABLE.size():
-		var point := Vector2.from_angle(TAU * i / Elements.SELECTABLE.size()) * Vector2(1.03, 0.58)
-		var socket := Vector3(point.x, 0.90, point.y)
-		Build.box(root, Vector3(0.38, 0.08, 0.38), socket, trim, Vector3(0, 45, 0))
-		var gem := Mats.emissive(Elements.color(Elements.SELECTABLE[i]), 0.95)
-		Build.prism(root, Vector3(0.32, 0.24, 0.32), socket + Vector3.UP * 0.16, gem, Vector3(0, 45, 0))
-	var focus := Node3D.new()
-	focus.position = Vector3(0, 1.63, 0)
-	focus.set_script(preload("res://src/world/spin.gd"))
-	focus.set("speed", 0.55)
-	root.add_child(focus)
-	Build.prism(focus, Vector3(0.65, 0.60, 0.48), Vector3(0, 0.30, 0), Mats.emissive(Color("#e1bdff"), 1.05))
-	Build.prism(focus, Vector3(0.65, 0.44, 0.48), Vector3(0, -0.22, 0), Mats.emissive(Color("#9970e0"), 1.05), Vector3(0, 0, 180))
+	Build.box(root, Vector3(1.39, 0.10, 1.22), Vector3(0, 0.27, 0), stone)
+	Build.box(root, Vector3(1.21, 0.58, 1.06), Vector3(0, 0.61, 0), Mats.tri("brick", Color("#716882")))
+	Build.box(root, Vector3(1.37, 0.05, 1.17), Vector3(0, 0.92, 0), trim)
+	Build.box(root, Vector3(1.49, 0.10, 1.26), Vector3(0, 0.98, 0), stone)
+	Build.collider(root, Vector3(1.37, 1.03, 1.22), Vector3(0, 0.515, 0))
+	Build.box(root, Vector3(0.66, 0.59, 0.06), Vector3(0, 0.61, 0.55), trim)
+	Build.box(root, Vector3(0.59, 0.53, 0.02), Vector3(0, 0.61, 0.585), Mats.flat(Color("#292338")))
+	# 碑面沿用 HUD 元素圖示，近看也能以輪廓辨識。
+	var glyph := Sprite3D.new()
+	glyph.texture = preload("res://assets/ui/element_icons.png")
+	glyph.hframes = Elements.ICON_ORDER.size()
+	glyph.frame = Elements.ICON_ORDER.find(element)
+	glyph.pixel_size = 1.0 / 32.0
+	glyph.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	glyph.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
+	glyph.position = Vector3(0, 0.61, 0.60)
+	root.add_child(glyph)
+	Build.box(root, Vector3(0.54, 0.09, 0.54), Vector3(0, 1.08, 0), trim, Vector3(0, 45, 0))
+	var gem := Mats.emissive(color, 0.82)
+	Build.prism(root, Vector3(0.49, 0.42, 0.39), Vector3(0, 1.53, 0), gem, Vector3(0, 28, 0))
+	Build.prism(root, Vector3(0.49, 0.39, 0.39), Vector3(0, 1.125, 0), gem, Vector3(0, 28, 180))
 	return root
 
 

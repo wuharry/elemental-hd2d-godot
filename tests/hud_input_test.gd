@@ -237,9 +237,14 @@ func _run() -> void:
 	var spawn := Vector2(main.world.def.player_start.x, main.world.def.player_start.z)
 	await _stand_at(player, spawn)
 	await _tap_key(KEY_E)
-	_check(not player.choosing_loadout and _widget(hud, "loadout_open").is_empty()
+	_check(hud.get("_altar_element") == -1
 		and _widget(hud, "interact").is_empty() and main.world.def.id == "village",
 		"村莊出生點按 E 不會傳送或配裝")
+
+	player.queue.clear()
+	player.queue.add(Elements.Type.WATER)
+	player.queue.add(Elements.Type.FIRE)
+	var prepared_spell := player.queue.slots.duplicate()
 
 	var gate: Vector2 = main.world.def.interactions["to_altar"]
 	var western_boundary: float = -main.world.def.play_half.x
@@ -254,51 +259,68 @@ func _run() -> void:
 		quit(1)
 		return
 	await _tap_portal(portal["c"], 2)
-	_check(main.world.def.id == "forest" and not player.choosing_loadout,
-		"連點傳送門後抵達森林祭壇，配裝由玩家另行觸發")
-	var altar := _widget(hud, "interact")
-	_check(main.world.def.interactions.has("equip") and not altar.is_empty(),
-		"傳送落點可直接與祭壇互動")
-	if altar.is_empty() or not main.world.def.interactions.has("equip"):
+	_check(main.world.def.id == "forest" and hud.get("_altar_element") == Elements.Type.EARTH
+		and player.loadout == Elements.LOADOUT,
+		"連點傳送門後抵達土祭壇，出戰鍵自動提示但不會自動換裝")
+	if main.world.def.id != "forest":
 		quit(1)
 		return
+	var altars: Dictionary = main.world.def.element_altars
+	_check(altars.size() == Elements.SELECTABLE.size() and altars.has_all(Elements.SELECTABLE),
+		"六種基礎元素各有一座專屬祭壇")
 
-	# 按住祭壇互動時離開感應範圍，原手指放開不能開啟配裝。
-	_touch(0, altar["c"], true)
+	var third: Vector2 = _widget(hud, "element", 2)["c"]
+	var fourth: Vector2 = _widget(hud, "element", 3)["c"]
+	_touch(1, third, true)
 	await _frames(2)
-	await _stand_at(player, Vector2(3, 1))
-	_touch(0, altar["c"], false)
+	var cleared_altar := await _walk_road(player, move, [altars[Elements.Type.EARTH] + Vector2(0, 2.0)])
+	_touch(1, third, false)
 	await _frames(2)
-	_check(not player.choosing_loadout and _widget(hud, "interact").is_empty(),
-		"離開祭壇後放開舊觸控不會遠端換裝")
+	_check(cleared_altar and hud.get("_altar_element") == -1 and player.loadout == Elements.LOADOUT
+		and player.queue.slots == prepared_spell, "走出祭壇後放開舊觸控，不換格也不加入佇列")
 
-	await _stand_at(player, main.world.def.interactions["equip"])
-	await _tap_key(KEY_E)
-	_check(player.choosing_loadout, "祭壇旁按 E 可裝備元素")
-	if not player.choosing_loadout:
+	var reached_earth := await _walk_road(player, move, [altars[Elements.Type.EARTH]])
+	_check(reached_earth and hud.get("_altar_element") == Elements.Type.EARTH,
+		"走回土祭壇自動顯示土元素與可替換的出戰格")
+	_touch(0, third, true)
+	await _frames(2)
+	_touch(0, third + Vector2(-110, 0), false)
+	await _frames(2)
+	_check(player.loadout == Elements.LOADOUT, "在槽位範圍外放開可取消換裝")
+	await _tap(third)
+	_check(player.loadout == [Elements.Type.WATER, Elements.Type.FIRE, Elements.Type.EARTH, Elements.Type.ICE],
+		"點第三格直接用土替換雷，其他位置不變")
+	await _tap(fourth)
+	_check(player.loadout == [Elements.Type.WATER, Elements.Type.FIRE, Elements.Type.EARTH, Elements.Type.ICE],
+		"土已裝備時，點另一格不產生重複元素")
+
+	# 保持一指按住出戰格，另一指沿石座走到相鄰祭壇。
+	_touch(1, fourth, true)
+	await _frames(2)
+	var reached_arcane := await _walk_road(player, move, [altars[Elements.Type.ARCANE]])
+	_touch(1, fourth, false)
+	await _frames(2)
+	_check(reached_arcane and hud.get("_altar_element") == Elements.Type.ARCANE
+		and player.loadout[3] == Elements.Type.ICE and player.queue.slots == prepared_spell,
+		"移到相鄰祭壇即更新提示，並取消前一座祭壇按下的舊觸控")
+
+	for element: int in Elements.SELECTABLE:
+		var reached := await _walk_road(player, move, [altars[element]])
+		_check(reached and hud.get("_altar_element") == element, "可沿祭壇前步行到%s祭壇" % Elements.display_name(element))
+
+	await _tap_key(KEY_4)
+	_check(player.loadout == [Elements.Type.WATER, Elements.Type.FIRE, Elements.Type.EARTH, Elements.Type.ARCANE],
+		"靠近奧術祭壇時鍵盤 4 直接替換第四格")
+	_check(player.queue.slots == prepared_spell, "換裝保留已排好的法術")
+	var reached_return := await _walk_road(player, move, [altars[Elements.Type.WATER], main.world.def.interactions["to_village"]])
+	var return_portal := _widget(hud, "interact")
+	_check(reached_return and hud.get("_altar_element") == -1 and not return_portal.is_empty(),
+		"從祭壇排步行至回程門，切回傳送門互動")
+	if return_portal.is_empty():
 		quit(1)
 		return
-	_check(_widget(hud, "loadout_option", 5).get("element", -1) == Elements.Type.ARCANE
-		and _widget(hud, "loadout_option", 6).is_empty(), "配裝顯示六種基礎元素")
-	await _tap(_widget(hud, "loadout_option", 4)["c"])
-	await _tap(_widget(hud, "loadout_apply")["c"])
-	_check(player.choosing_loadout and player.loadout == Elements.LOADOUT, "少於四種時無法確定")
-	await _tap(_widget(hud, "loadout_cancel")["c"])
-	_check(not player.choosing_loadout and player.loadout == Elements.LOADOUT, "取消配裝保留原按鍵")
-
-	await _tap(_widget(hud, "interact")["c"])
-	await _tap(_widget(hud, "loadout_option", 1)["c"])
-	await _tap(_widget(hud, "loadout_option", 4)["c"])
-	await _tap(_widget(hud, "loadout_option", 3)["c"])
-	await _tap(_widget(hud, "loadout_option", 1)["c"])
-	await _tap(_widget(hud, "loadout_option", 5)["c"])
-	await _tap(_widget(hud, "loadout_apply")["c"])
-	_check(player.loadout == [Elements.Type.WATER, Elements.Type.ICE, Elements.Type.EARTH, Elements.Type.ARCANE],
-		"確定後四個出戰按鍵對應新的元素順序")
-	_check(player.queue.slots == Elements.LOADOUT, "換裝保留已排好的法術")
-	await _stand_at(player, main.world.def.interactions["to_village"])
-	await _tap_portal(_widget(hud, "interact")["c"])
-	_check(main.world.def.id == "village" and not player.choosing_loadout, "回程傳送門返回村莊")
+	await _tap_portal(return_portal["c"])
+	_check(main.world.def.id == "village" and hud.get("_altar_element") == -1, "回程傳送門返回村莊並清除祭壇提示")
 	var arrival := Vector2(player.position.x, player.position.z)
 	var arrival_distance := arrival.distance_to(gate)
 	_check(arrival.x > gate.x and arrival_distance >= 1.0 and arrival_distance <= 1.6,
