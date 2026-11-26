@@ -1,9 +1,11 @@
 class_name FoliageField
 extends RefCounted
-## 花草：兩個 MultiMesh（草叢、花），整片一次畫完。
+## 花草：依區塊建立 MultiMesh，讓主鏡頭和反射探針各面能剔除視錐外的植被。
 ## 每株是兩片交叉的面片，大小固定 0.5 公尺（16px → 32 px／公尺，BLUEPRINT A1）。
 
 const AREA := Rect2(-36.0, -22.0, 72.0, 48.0)
+const TILE_SIZE := 12.0
+const CARD_MARGIN := 0.6
 
 
 static func build(def: SceneDef, extra_flower_spots: Array[Vector3]) -> Node3D:
@@ -34,7 +36,7 @@ static func build(def: SceneDef, extra_flower_spots: Array[Vector3]) -> Node3D:
 		c = c.lerp(tints[2], _patch(p, 0.05, 9.7) * 0.3)
 		grass_col.append(c * rng.randf_range(0.88, 1.06))
 		grass_var.append(float(rng.randi() % 2))
-	root.add_child(_multimesh(mesh, def.grass_atlas, 2.0, grass_xf, grass_col, grass_var, 0.11))
+	_add_tiles(root, mesh, def.grass_atlas, 2.0, grass_xf, grass_col, grass_var, 0.11)
 
 	# --- 花：成片出現，而不是平均撒 ---
 	var flower_xf: Array[Transform3D] = []
@@ -61,7 +63,7 @@ static func build(def: SceneDef, extra_flower_spots: Array[Vector3]) -> Node3D:
 		flower_xf.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU), spot))
 		flower_col.append(Color.WHITE)
 		flower_var.append(float(rng.randi() % 4))
-	root.add_child(_multimesh(mesh, def.flower_atlas, 4.0, flower_xf, flower_col, flower_var, 0.08))
+	_add_tiles(root, mesh, def.flower_atlas, 4.0, flower_xf, flower_col, flower_var, 0.08)
 	return root
 
 
@@ -78,29 +80,44 @@ static func _patch(p: Vector2, freq: float, offset: float) -> float:
 	return clampf(v / 3.8 + 0.5, 0.0, 1.0)
 
 
-static func _multimesh(mesh: Mesh, atlas: String, cols: float, xfs: Array[Transform3D], colors: Array[Color], variants: Array[float], wind: float) -> MultiMeshInstance3D:
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	mm.use_custom_data = true
-	mm.mesh = mesh
-	mm.instance_count = xfs.size()
+static func _add_tiles(parent: Node3D, mesh: Mesh, atlas: String, cols: float, xfs: Array[Transform3D],
+		colors: Array[Color], variants: Array[float], wind: float) -> void:
+	var tiles := {}
 	for i in xfs.size():
-		mm.set_instance_transform(i, xfs[i])
-		mm.set_instance_color(i, colors[i])
-		mm.set_instance_custom_data(i, Color(variants[i], 0, 0, 0))
+		var at := xfs[i].origin
+		var cell := Vector2i(floori(at.x / TILE_SIZE), floori(at.z / TILE_SIZE))
+		if not tiles.has(cell):
+			tiles[cell] = []
+		tiles[cell].append(i)
+
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/foliage_card.gdshader")
 	mat.set_shader_parameter("atlas", Mats.tex(atlas))
 	mat.set_shader_parameter("cols", cols)
 	mat.set_shader_parameter("wind", wind)
-	var mmi := MultiMeshInstance3D.new()
-	mmi.multimesh = mm
-	mmi.material_override = mat
-	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	if wind > 0.0:
-		AmbientLife.tag(mmi, "wind")
-	return mmi
+	for indices: Array in tiles.values():
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.use_colors = true
+		mm.use_custom_data = true
+		mm.mesh = mesh
+		mm.instance_count = indices.size()
+		var bounds := AABB(xfs[indices[0]].origin, Vector3.ZERO)
+		for j in indices.size():
+			var i: int = indices[j]
+			mm.set_instance_transform(j, xfs[i])
+			mm.set_instance_color(j, colors[i])
+			mm.set_instance_custom_data(j, Color(variants[i], 0, 0, 0))
+			bounds = bounds.expand(xfs[i].origin)
+		# 保留交叉面片的高度與最強雨風位移，避免格子邊緣的花草跳出畫面。
+		mm.custom_aabb = bounds.grow(CARD_MARGIN)
+
+		var instance := MultiMeshInstance3D.new()
+		instance.multimesh = mm
+		instance.material_override = mat
+		instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		AmbientLife.tag(instance, "wind")
+		parent.add_child(instance)
 
 
 ## 兩片交叉的直立面片，原點在底部中央。

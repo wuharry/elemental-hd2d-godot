@@ -220,6 +220,10 @@ func _check_runtime_weather_season_and_character_shader() -> void:
 	await _frames(5)
 	var player: Player = main.get("player")
 	var tod: TimeOfDay = main.get("time_of_day")
+	var camera := (main.get("rig") as CameraRig).camera
+	_check((camera.cull_mask & TimeOfDay.MAIN_SUN_LAYER) != 0
+		and (camera.cull_mask & TimeOfDay.REFLECTION_SUN_LAYER) == 0,
+		"遊戲鏡頭只使用四級主方向光，不重複算入倒影方向光")
 	var hud: Node = main.get("hud")
 
 	# 驗證角色三層均套用進階像素 3D 光照 shader，並正確響應轉向與換裝。

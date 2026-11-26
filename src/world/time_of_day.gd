@@ -10,6 +10,9 @@ const ORDER := ["morning", "day", "dusk", "night"]
 const LABELS := {"morning": "晨", "day": "日", "dusk": "昏", "night": "夜"}
 const WEATHERS := ["clear", "rain"]
 const WEATHER_LABELS := {"clear": "晴", "rain": "雨"}
+const REFLECTION_SUN_LAYER := 1 << 3
+const MAIN_SUN_LAYER := 1 << 4
+const REFLECTION_CAPTURE_DISTANCE := 40.0
 
 ## sun_yaw／sun_pitch：太陽（夜晚是月亮）的方向，單位度。yaw 135 = 從右後方照向鏡頭。
 ## win0／win1／win2：三種窗戶的發光強度。lamps：路燈與門燈的強度倍率。
@@ -147,6 +150,7 @@ var _scene_id := "village"
 var _season := "summer"
 var _outdoor := true
 var sun: DirectionalLight3D
+var reflection_sun: DirectionalLight3D
 var env: Environment
 var sky_mat: ProceduralSkyMaterial
 
@@ -167,7 +171,14 @@ func _ready() -> void:
 	sun.light_angular_distance = 1.2
 	sun.shadow_blur = 1.2
 	sun.light_volumetric_fog_energy = 1.0
+	sun.layers = MAIN_SUN_LAYER
 	add_child(sun)
+	# 反射探針一次畫六面。近景倒影用單張方向光陰影，遊戲鏡頭仍用四級陰影。
+	reflection_sun = sun.duplicate() as DirectionalLight3D
+	reflection_sun.layers = REFLECTION_SUN_LAYER
+	reflection_sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+	reflection_sun.directional_shadow_max_distance = REFLECTION_CAPTURE_DISTANCE
+	add_child(reflection_sun)
 
 	env = Environment.new()
 	sky_mat = ProceduralSkyMaterial.new()
@@ -312,13 +323,16 @@ func _process(delta: float) -> void:
 
 func _refresh_water_reflections() -> void:
 	if is_inside_tree():
-		get_tree().call_group("water_reflections", "refresh")
+		get_tree().call_group("water_reflections", "refresh", _to)
 
 
 func _apply(p: Dictionary) -> void:
 	sun.rotation_degrees = Vector3(p["sun_pitch"], p["sun_yaw"], 0.0)
 	sun.light_color = p["sun_color"]
 	sun.light_energy = p["sun_energy"]
+	reflection_sun.rotation = sun.rotation
+	reflection_sun.light_color = sun.light_color
+	reflection_sun.light_energy = sun.light_energy
 	env.ambient_light_color = p["ambient_color"]
 	env.ambient_light_energy = p["ambient_energy"]
 	sky_mat.sky_top_color = p["sky_top"]

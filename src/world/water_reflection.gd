@@ -6,6 +6,8 @@ var surface_rect := Rect2()
 var surface_level := 0.0
 var ground_masked := false
 var _refresh_pending := false
+var _requested_lighting: Dictionary = {}
+var _last_lighting: Dictionary = {}
 var _rest_position := Vector3.ZERO
 var _offset_sign := -1.0
 
@@ -79,7 +81,9 @@ func _place_capture_over_water() -> void:
 		origin_offset = to_local(best)
 
 
-func refresh() -> void:
+## 同一幀的請求以最後的光影為準。空字典供需要重新捕捉場景幾何的呼叫使用。
+func refresh(lighting: Dictionary = {}) -> void:
+	_requested_lighting = lighting
 	if _refresh_pending:
 		return
 	_refresh_pending = true
@@ -90,6 +94,9 @@ func _refresh() -> void:
 	_refresh_pending = false
 	if not is_inside_tree() or is_queued_for_deletion():
 		return
+	if not _requested_lighting.is_empty() and _requested_lighting == _last_lighting:
+		return
+	_last_lighting = _requested_lighting
 	# UPDATE_ONCE 依 transform 變更重拍；來回位移避免多次切換後累積漂移。
 	_offset_sign = -_offset_sign
 	position = _rest_position + Vector3(0.001 * _offset_sign, 0.0, 0.0)

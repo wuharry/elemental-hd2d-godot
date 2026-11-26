@@ -223,7 +223,9 @@ func _check_world(world: GameWorld, expected_count: int) -> void:
 	var capture_clear := true
 	for probe: ReflectionProbe in probes:
 		probes_ok = probes_ok and probe.update_mode == ReflectionProbe.UPDATE_ONCE \
-			and probe.cull_mask == 1 and probe.reflection_mask == 4 and probe.enable_shadows \
+			and probe.cull_mask == (1 | TimeOfDay.REFLECTION_SUN_LAYER) \
+			and probe.reflection_mask == 4 and probe.enable_shadows \
+			and is_equal_approx(probe.max_distance, TimeOfDay.REFLECTION_CAPTURE_DISTANCE) \
 			and probe.ambient_mode == ReflectionProbe.AMBIENT_DISABLED and probe.box_projection \
 			and probe.size.x <= 44.0 and probe.size.z <= 44.0
 		if probe.ground_masked:
@@ -259,10 +261,18 @@ func _test_time_refresh(tod: TimeOfDay, probe: ReflectionProbe) -> void:
 	tod.set_time("day", true)
 	_check(probe.position == initial, "Instant changes defer capture until all lighting changes are applied")
 	await process_frame
+	_check(probe.position == initial, "Returning to the already captured lighting within one frame does not recapture")
+	tod.set_time("night", true)
+	tod.set_time("dusk", true)
+	await process_frame
 	var first := probe.position
-	_check(first != initial and first.distance_to(initial) <= 0.0021, "Multiple same-frame changes coalesce into one tiny transform refresh")
+	_check(first != initial and first.distance_to(initial) <= 0.0021,
+		"Multiple changes to different lighting coalesce into one tiny transform refresh")
 	await process_frame
 	_check(probe.position == first, "Idle frames do not recapture probes")
+	tod.set_time("dusk", true)
+	await process_frame
+	_check(probe.position == first, "Selecting the same effective lighting again does not recapture")
 	tod.set_time("night")
 	tod._process(tod.transition_time * 0.5)
 	await process_frame
@@ -271,6 +281,16 @@ func _test_time_refresh(tod: TimeOfDay, probe: ReflectionProbe) -> void:
 	await process_frame
 	var second := probe.position
 	_check(second != first and is_equal_approx(tod.sun.light_energy, 0.5), "Completed transition refreshes after final night lighting is applied")
+	_check(tod.reflection_sun.rotation.is_equal_approx(tod.sun.rotation)
+		and tod.reflection_sun.light_color.is_equal_approx(tod.sun.light_color)
+		and is_equal_approx(tod.reflection_sun.light_energy, tod.sun.light_energy),
+		"Reflection shadows follow the same direction, color and intensity as the main lighting after a transition")
+	_check(tod.sun.layers == TimeOfDay.MAIN_SUN_LAYER
+		and tod.reflection_sun.layers == TimeOfDay.REFLECTION_SUN_LAYER
+		and tod.sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
+		and tod.reflection_sun.directional_shadow_mode == DirectionalLight3D.SHADOW_ORTHOGONAL
+		and tod.reflection_sun.shadow_enabled,
+		"Main camera keeps four cascades and reflection capture has a separate shadow-casting light")
 	tod.set_time("day", true)
 	await process_frame
 	_check(probe.position == first, "Refresh offset alternates without cumulative drift")

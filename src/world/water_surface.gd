@@ -50,12 +50,13 @@ static func add_reflections(parent: Node3D, rects: Array, level: float, ground_m
 			probe.surface_level = level
 			probe.ground_masked = ground_masked
 			probe.box_projection = true
-			probe.cull_mask = 1 # 靜態場景；排除水面及有鏡頭朝向的角色紙片。
+			# 靜態場景和倒影方向光。角色紙片、水面與主鏡頭方向光在各自的層。
+			probe.cull_mask = 1 | TimeOfDay.REFLECTION_SUN_LAYER
 			probe.reflection_mask = LAYER
 			probe.ambient_mode = ReflectionProbe.AMBIENT_DISABLED
 			probe.enable_shadows = true
 			probe.update_mode = ReflectionProbe.UPDATE_ONCE
-			probe.max_distance = 40.0
+			probe.max_distance = TimeOfDay.REFLECTION_CAPTURE_DISTANCE
 			parent.add_child(probe)
 
 

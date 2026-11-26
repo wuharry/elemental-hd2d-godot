@@ -56,6 +56,7 @@ func _ready() -> void:
 	rig.target = player
 	rig.reveal_foliage = not args.has("--no-reveal")
 	add_child(rig)
+	rig.camera.cull_mask &= ~TimeOfDay.REFLECTION_SUN_LAYER
 	player.camera_yaw = rig.yaw()
 	player.camera_pitch_deg = rig.pitch_deg
 	player.aim_dir = Vector3.BACK.rotated(Vector3.UP, player.camera_yaw)
