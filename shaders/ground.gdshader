@@ -22,6 +22,7 @@ uniform float path_roughness = 0.78;
 uniform float base_roughness = 1.0;
 global uniform float rain_wetness;
 global uniform float rain_intensity;
+global uniform float water_reflection_y;
 
 varying vec3 wpos;
 varying vec3 wnrm;
@@ -47,6 +48,9 @@ void vertex() {
 }
 
 void fragment() {
+	if (INV_VIEW_MATRIX[3].y < water_reflection_y && wpos.y < water_reflection_y - 0.02) {
+		discard;
+	}
 	if (wnrm.y < 0.7) {
 		// 側面：依朝向選投影軸；越往下越暗，裂谷才看起來深
 		vec2 suv = (abs(wnrm.x) > abs(wnrm.z) ? vec2(wpos.z, -wpos.y) : vec2(wpos.x, -wpos.y)) * texel_scale;

@@ -255,8 +255,7 @@ func _check_runtime_weather_season_and_character_shader() -> void:
 	# 驗證晴雨切換、雨勢與濕地數值、粒子開關、暖燈與室內防雨。
 	_check(tod.weather == "clear" and is_zero_approx(tod.rain_wetness) and is_zero_approx(tod.rain_intensity),
 		"預設天氣為晴天且地面乾燥")
-	var village_probe: ReflectionProbe = get_nodes_in_group("water_reflections")[0]
-	var probe_before := village_probe.position
+	var village_refl := get_nodes_in_group("water_reflections")[0]
 	tod.set_weather("rain", true)
 	await _frames(2)
 	var rain_emitting := true
@@ -277,7 +276,9 @@ func _check_runtime_weather_season_and_character_shader() -> void:
 		"切至雨天立即啟用濕地反光與雨勢全域參數")
 	_check(rain_emitting and dry_hidden and day_rain_lamps,
 		"雨天開啟雨絲水花、暫停蝴蝶塵埃，且白天下雨也會亮起路燈與暖光")
-	_check(village_probe.position != probe_before, "切至雨天觸發水面反射探針更新")
+	_check(is_instance_valid(village_refl) and is_equal_approx(village_refl.surface_level, 0.08)
+		and (village_refl.camera.cull_mask & 2) != 0,
+		"切至雨天維持村莊平面鏡像水反與主角倒影層")
 
 	# 進室內地下城應保持乾燥，回村莊恢復雨天。
 	main.call("switch_scene", "dungeon")

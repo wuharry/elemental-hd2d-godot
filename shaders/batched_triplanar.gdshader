@@ -11,11 +11,13 @@ uniform float roughness = 0.95;
 uniform float normal_depth = 1.0;
 uniform float metallic = 0.0;
 global uniform float rain_wetness;
+global uniform float water_reflection_y;
 
 varying vec3 source_pos;
 varying vec3 source_weights;
 varying vec3 source_tint;
 varying float wet_top;
+varying float world_y;
 
 void vertex() {
 	source_pos = (CUSTOM1.xyz * texel_scale + texel_offset) * vec3(1.0, -1.0, 1.0);
@@ -28,6 +30,7 @@ void vertex() {
 	// triplanar 的切線座標系也先依原始方塊算好，再轉入合併網格座標系。
 	BINORMAL = CUSTOM3.xyz;
 	wet_top = smoothstep(0.32, 0.82, normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz).y);
+	world_y = (MODEL_MATRIX * vec4(VERTEX, 1.0)).y;
 }
 
 vec3 sample_local(sampler2D tex) {
@@ -37,6 +40,9 @@ vec3 sample_local(sampler2D tex) {
 }
 
 void fragment() {
+	if (INV_VIEW_MATRIX[3].y < water_reflection_y && world_y < water_reflection_y - 0.02) {
+		discard;
+	}
 	float wet = rain_wetness * wet_top;
 	ALBEDO = sample_local(albedo_tex) * source_tint * mix(1.0, 0.74, wet);
 	NORMAL_MAP = sample_local(normal_tex);

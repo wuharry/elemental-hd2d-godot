@@ -1,7 +1,8 @@
 extends SceneTree
-## 實際世界的水面覆蓋、探針捕捉位置及日夜切換生命週期。
+## 實際世界的水面覆蓋、平面鏡像反射相機數學、各場景主水位及日夜光影同步。
 
 const Water := preload("res://src/world/water_surface.gd")
+const Reflection := preload("res://src/world/water_reflection.gd")
 const Batcher := preload("res://src/world/mesh_batcher.gd")
 var _passed := 0
 var _failed := 0
@@ -43,11 +44,26 @@ func _test_union() -> void:
 	_check(same_coverage, "Pond outline remains identical after removing overlap")
 
 
-func _covered(point: Vector3, probes: Array[Node]) -> bool:
-	for probe: ReflectionProbe in probes:
-		if AABB(-probe.size * 0.5, probe.size).has_point(probe.to_local(point)):
-			return true
-	return false
+func _test_mirror_math() -> void:
+	var plane_y := 0.08
+	var basis := Basis.from_euler(Vector3(deg_to_rad(-33.0), deg_to_rad(22.0), 0.0))
+	var src := Transform3D(basis, Vector3(6.5, 16.3, 24.0))
+	var dst := Reflection.mirror_transform(src, plane_y)
+	_check(is_equal_approx(dst.origin.x, src.origin.x)
+		and is_equal_approx(dst.origin.z, src.origin.z)
+		and is_equal_approx(dst.origin.y, 2.0 * plane_y - src.origin.y),
+		"Mirrored camera reflects Y across the exact water plane")
+	_check(is_equal_approx(dst.basis.determinant(), 1.0)
+		and dst.basis.get_scale().is_equal_approx(Vector3.ONE),
+		"Mirrored camera preserves a right-handed unit-scale basis without inverted culling")
+	# 水面上任意一點在鏡像相機的局部座標須為 (x_cam, -y_cam, z_cam)，對應 UV (u, 1 - v)。
+	var water_point := Vector3(-5.2, plane_y, 7.4)
+	var local_main := src.affine_inverse() * water_point
+	var local_refl := dst.affine_inverse() * water_point
+	_check(is_equal_approx(local_refl.x, local_main.x)
+		and is_equal_approx(local_refl.y, -local_main.y)
+		and is_equal_approx(local_refl.z, local_main.z),
+		"Water-plane points project to exact (u, 1 - v) coordinates in the mirrored camera")
 
 
 func _inside_any(p: Vector2, rects: Array) -> bool:
@@ -85,7 +101,6 @@ func _test_pond_basin(world: GameWorld) -> void:
 	for node in pond.get_children():
 		if node is MeshInstance3D:
 			var bounds: AABB = node.global_transform * node.get_aabb()
-			# 直接量測真實不透明池底幾何；不靠材質參數或工廠常數代替驗證。
 			if bounds.end.y < -0.1:
 				floors.append({"rect": _footprint(node), "top": bounds.end.y})
 			elif String(node.name).contains("PondBorder"):
@@ -194,111 +209,69 @@ func _test_river_bed(world: GameWorld) -> void:
 	_check(is_finite(_river_depth(Vector2(-2.5, 0.5), floors, level)), "Riverbed continues beneath the existing bridge")
 
 
-func _test_capture_headroom(world: GameWorld) -> void:
-	var clear := true
-	var origins: Array[Vector3] = []
-	for probe: ReflectionProbe in get_nodes_in_group("water_reflections"):
-		if not probe.ground_masked:
-			continue
-		var origin := probe.to_global(probe.origin_offset)
-		origins.append(origin)
-		for mesh: MeshInstance3D in world.find_children("*", "MeshInstance3D", true, false):
-			if not mesh.mesh is BoxMesh or (mesh.layers & 1) == 0:
-				continue
-			var material := mesh.get_active_material(0)
-			if material is BaseMaterial3D and material.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED:
-				continue
-			var box := (mesh.global_transform * mesh.get_aabb()).grow(0.049)
-			clear = clear and box.intersects_segment(origin, origin + Vector3.UP * 0.75) == null
-	_check(clear, "%s reflection captures have actual primitive headroom, including backdrop cliffs and later river rocks" % world.def.id)
-	print("%s water capture origins: %s" % [world.def.id, origins])
-
-
-func _check_world(world: GameWorld, expected_count: int) -> void:
-	var probes := get_nodes_in_group("water_reflections")
+func _check_world(world: GameWorld, expected_count: int, expected_level: float) -> void:
+	var refls := get_nodes_in_group("water_reflections")
 	var water := get_nodes_in_group("water_surfaces")
 	var scene_id := world.def.id
-	_check(probes.size() == expected_count, "%s uses %d bounded shared probes" % [scene_id, expected_count])
-	var probes_ok := true
-	var capture_clear := true
-	for probe: ReflectionProbe in probes:
-		probes_ok = probes_ok and probe.update_mode == ReflectionProbe.UPDATE_ONCE \
-			and probe.cull_mask == (1 | TimeOfDay.REFLECTION_SUN_LAYER) \
-			and probe.reflection_mask == 4 and probe.enable_shadows \
-			and is_equal_approx(probe.max_distance, TimeOfDay.REFLECTION_CAPTURE_DISTANCE) \
-			and probe.ambient_mode == ReflectionProbe.AMBIENT_DISABLED and probe.box_projection \
-			and probe.size.x <= 44.0 and probe.size.z <= 44.0
-		if probe.ground_masked:
-			var origin: Vector3 = world.to_local(probe.to_global(probe.origin_offset))
-			var xz := Vector2(origin.x, origin.z)
-			# 地面確實以一公尺格心決定實體岸壁；不能只看抽象河道連續曲線。
-			var cell := xz.floor() + Vector2.ONE * 0.5
-			capture_clear = capture_clear and world.def.is_void(xz) and world.def.is_void(cell) \
-				and not world.def.on_bridge(xz) and is_equal_approx(origin.y, probe.surface_level + 0.25)
-			for bridge: Rect2 in world.def.bridges:
-				capture_clear = capture_clear and not bridge.grow(0.75).has_point(xz)
-	_check(probes_ok, "%s probes retain shadows, affect only water and exclude characters/water from capture" % scene_id)
-	_check(capture_clear, "%s captures from exposed water above water level, outside solid banks and bridges" % scene_id)
+	_check(refls.size() == expected_count, "%s uses %d shared planar reflection controller" % [scene_id, expected_count])
+	if expected_count > 0:
+		var refl := refls[0] as Reflection
+		_check(refl != null and refl.viewport != null and refl.camera != null,
+			"%s planar reflection owns a SubViewport and mirrored Camera3D" % scene_id)
+		_check(is_equal_approx(refl.surface_level, expected_level),
+			"%s locks planar reflection plane to primary water level %.2f" % [scene_id, expected_level])
+		_check(refl.camera.cull_mask == Reflection.CULL_MASK
+			and (refl.camera.cull_mask & Water.LAYER) == 0
+			and (refl.camera.cull_mask & 2) != 0
+			and (refl.camera.cull_mask & TimeOfDay.MAIN_SUN_LAYER) == 0,
+			"%s reflection camera reflects world + player + reflection sun and excludes water/main sun" % scene_id)
+		var probe_cam := Camera3D.new()
+		probe_cam.fov = 25.0
+		probe_cam.global_transform = Transform3D(Basis.from_euler(Vector3(deg_to_rad(-33.0), deg_to_rad(22.0), 0.0)), Vector3(0, 16.0, 24.0))
+		root.add_child(probe_cam)
+		refl.sync_to_camera(probe_cam, Vector2(1600, 900))
+		_check(refl.viewport.size == Vector2i(800, 450)
+			and is_equal_approx(refl.camera.fov, 25.0)
+			and is_equal_approx(refl.camera.global_position.y, 2.0 * expected_level - 16.0),
+			"%s planar camera mirrors main camera at half viewport resolution" % scene_id)
+		probe_cam.free()
 	var surfaces_ok := true
-	var coverage_ok := true
 	for mesh: MeshInstance3D in water:
 		var mat := mesh.material_override as ShaderMaterial
-		surfaces_ok = surfaces_ok and mesh.layers == 4 \
+		surfaces_ok = surfaces_ok and mesh.layers == Water.LAYER \
 			and mesh.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_OFF \
-			and mat != null and mat.get_shader_parameter("normal_tex") is Texture2D
-		var bounds := mesh.get_aabb()
-		for x: float in [bounds.position.x + 0.005, bounds.end.x - 0.005]:
-			for z: float in [bounds.position.z + 0.005, bounds.end.z - 0.005]:
-				coverage_ok = coverage_ok and _covered(mesh.to_global(Vector3(x, bounds.end.y, z)), probes)
-	_check(surfaces_ok, "%s water shares normal-mapped material and avoids self-cast shadows" % scene_id)
-	_check(coverage_ok, "%s all water surfaces, including well and puddles, have local reflection coverage" % scene_id)
+			and mat != null and mat.get_shader_parameter("normal_tex") is Texture2D \
+			and mat.get_shader_parameter("reflection_tex") is ViewportTexture
+	_check(surfaces_ok, "%s water surfaces share normal/planar-reflection parameters and avoid self-cast shadows" % scene_id)
 
 
-func _test_time_refresh(tod: TimeOfDay, probe: ReflectionProbe) -> void:
+func _test_time_sync(tod: TimeOfDay) -> void:
 	tod.set_process(false)
-	var initial := probe.position
-	tod.set_time("night", true)
-	tod.set_time("day", true)
-	_check(probe.position == initial, "Instant changes defer capture until all lighting changes are applied")
-	await process_frame
-	_check(probe.position == initial, "Returning to the already captured lighting within one frame does not recapture")
-	tod.set_time("night", true)
-	tod.set_time("dusk", true)
-	await process_frame
-	var first := probe.position
-	_check(first != initial and first.distance_to(initial) <= 0.0021,
-		"Multiple changes to different lighting coalesce into one tiny transform refresh")
-	await process_frame
-	_check(probe.position == first, "Idle frames do not recapture probes")
-	tod.set_time("dusk", true)
-	await process_frame
-	_check(probe.position == first, "Selecting the same effective lighting again does not recapture")
 	tod.set_time("night")
-	tod._process(tod.transition_time * 0.5)
+	tod._process(tod.transition_time)
 	await process_frame
-	_check(probe.position == first, "Smooth lighting transition does not recapture every frame")
-	tod._process(tod.transition_time * 0.5)
-	await process_frame
-	var second := probe.position
-	_check(second != first and is_equal_approx(tod.sun.light_energy, 0.5), "Completed transition refreshes after final night lighting is applied")
-	_check(tod.reflection_sun.rotation.is_equal_approx(tod.sun.rotation)
+	_check(is_equal_approx(tod.sun.light_energy, 0.5)
+		and tod.reflection_sun.rotation.is_equal_approx(tod.sun.rotation)
 		and tod.reflection_sun.light_color.is_equal_approx(tod.sun.light_color)
 		and is_equal_approx(tod.reflection_sun.light_energy, tod.sun.light_energy),
-		"Reflection shadows follow the same direction, color and intensity as the main lighting after a transition")
+		"Reflection sun follows main lighting direction, color and intensity after transition")
 	_check(tod.sun.layers == TimeOfDay.MAIN_SUN_LAYER
 		and tod.reflection_sun.layers == TimeOfDay.REFLECTION_SUN_LAYER
 		and tod.sun.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS
 		and tod.reflection_sun.directional_shadow_mode == DirectionalLight3D.SHADOW_ORTHOGONAL
 		and tod.reflection_sun.shadow_enabled,
-		"Main camera keeps four cascades and reflection capture has a separate shadow-casting light")
-	tod.set_time("day", true)
-	await process_frame
-	_check(probe.position == first, "Refresh offset alternates without cumulative drift")
+		"Main camera keeps four cascades and planar reflection keeps orthogonal shadow light")
 
 
 func _run() -> void:
 	_test_union()
-	var expected := {"village": 1, "forest": 3, "snow": 0, "dungeon": 4}
+	_test_mirror_math()
+	var expected := {
+		"village": {"count": 1, "level": 0.08},
+		"forest": {"count": 1, "level": -0.4},
+		"snow": {"count": 0, "level": 0.0},
+		"dungeon": {"count": 1, "level": -0.3},
+	}
 	var tod: TimeOfDay
 	for scene_id: String in Scenes.LIST:
 		var world := GameWorld.new(Scenes.make(scene_id))
@@ -307,9 +280,6 @@ func _run() -> void:
 			_test_pond_basin(world)
 		elif scene_id == "forest":
 			_test_river_bed(world)
-		if scene_id in ["forest", "dungeon"]:
-			_test_capture_headroom(world)
-		# 遊戲也在 ready 後立即合批；補覆蓋的 deferred 不能丟失小水面的父節點。
 		Batcher.batch(world)
 		if tod == null:
 			tod = TimeOfDay.new()
@@ -317,21 +287,13 @@ func _run() -> void:
 		tod.apply_scene(world.def)
 		tod.set_time("day", true)
 		await process_frame
-		_check_world(world, expected[scene_id])
-		var probes := get_nodes_in_group("water_reflections")
+		_check_world(world, expected[scene_id]["count"], expected[scene_id]["level"])
 		if scene_id == "village":
-			await _test_time_refresh(tod, probes[0])
-		if not probes.is_empty():
-			var probe: ReflectionProbe = probes[0]
-			var previous := probe.position
-			tod.set_time("night", true)
-			await process_frame
-			_check(probe.position != previous, "%s newly built scene responds to existing time-of-day refresh" % scene_id)
-		# 模擬切場景時仍有一個已排程的 refresh，舊探針不能留在群組或回呼已釋放節點。
+			await _test_time_sync(tod)
 		tod.set_time("day", true)
 		world.free()
 		await process_frame
-		_check(get_nodes_in_group("water_reflections").is_empty(), "%s probes leave group when scene is removed" % scene_id)
+		_check(get_nodes_in_group("water_reflections").is_empty(), "%s planar reflection leaves group when scene is removed" % scene_id)
 	tod.free()
 	# 未進場的小水面也可能在第一次 deferred coverage 前就移除。
 	var puddle := SetPieces.puddle(Vector2.ONE)

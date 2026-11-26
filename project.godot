@@ -50,6 +50,10 @@ rain_intensity={
 "type": "float",
 "value": 0.0
 }
+water_reflection_y={
+"type": "float",
+"value": -1000.0
+}
 
 [rendering]
 

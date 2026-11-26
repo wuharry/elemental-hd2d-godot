@@ -1,19 +1,18 @@
 extends RefCounted
-## 水材質、無重疊水面與局部反射共用入口，維持世界32px/m且不烘焙光影。
+## 水材質、無重疊水面與平面鏡像水反共用入口，維持世界32px/m且不烘焙光影。
 
 const Reflection := preload("res://src/world/water_reflection.gd")
 const LAYER := 4
-const PROBE_SPAN := 32.0
-const PROBE_MARGIN := 6.0
 
 
-static func material(flow := Vector2.ZERO, deep := Color(0.07, 0.19, 0.24), shallow := Color(0.16, 0.36, 0.38)) -> ShaderMaterial:
+static func material(flow := Vector2.ZERO, deep := Color(0.05, 0.16, 0.22), shallow := Color(0.14, 0.36, 0.40)) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://shaders/water.gdshader")
 	mat.set_shader_parameter("normal_tex", Mats.tex("water_n"))
 	mat.set_shader_parameter("flow", flow)
 	mat.set_shader_parameter("deep", deep)
 	mat.set_shader_parameter("shallow", shallow)
+	mat.set_shader_parameter("has_reflection", 0.0)
 	return mat
 
 
@@ -26,41 +25,57 @@ static func add_surface(parent: Node3D, rects: Array, level: float, thickness: f
 		mesh.layers = LAYER
 		# 水仍接收陰影，但薄片不能把自身與旁邊的水壓成黑塊。
 		mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		mesh.set_meta("water_level", level)
+		mesh.set_meta("water_area", rect.get_area())
 		mesh.add_to_group("water_surfaces")
 
 
-static func add_reflections(parent: Node3D, rects: Array, level: float, ground_masked := false) -> void:
+static func _total_area(rects: Array) -> float:
+	var area := 0.0
+	for rect: Rect2 in union_rects(rects):
+		area += rect.get_area()
+	return area
+
+
+static func _find_owner(parent: Node) -> Node:
+	var cur := parent
+	while cur != null:
+		if cur is GameWorld:
+			return cur
+		cur = cur.get_parent()
+	return parent
+
+
+static func _ensure_world_reflection(parent: Node3D, rects: Array, level: float) -> void:
+	if not is_instance_valid(parent) or not parent.is_inside_tree() or parent.is_queued_for_deletion():
+		return
+	var host := _find_owner(parent)
+	var world_level := parent.to_global(Vector3(0.0, level, 0.0)).y
+	var area := _total_area(rects)
+	var existing: Reflection = null
+	for node in host.get_children():
+		if node is Reflection:
+			existing = node as Reflection
+			break
+	if existing == null:
+		existing = Reflection.new()
+		existing.name = "WaterReflection"
+		existing.register_surface(world_level, area)
+		host.add_child(existing)
+	else:
+		existing.register_surface(world_level, area)
+
+
+static func add_reflections(parent: Node3D, rects: Array, level: float, _ground_masked := false) -> void:
 	if rects.is_empty():
 		return
-	var bounds: Rect2 = rects[0]
-	for rect: Rect2 in rects:
-		bounds = bounds.merge(rect)
-	var columns := maxi(1, ceili(bounds.size.x / PROBE_SPAN))
-	var rows := maxi(1, ceili(bounds.size.y / PROBE_SPAN))
-	var tile := bounds.size / Vector2(columns, rows)
-	for y in rows:
-		for x in columns:
-			var center := bounds.position + tile * (Vector2(x, y) + Vector2.ONE * 0.5)
-			var probe := Reflection.new()
-			probe.name = "WaterReflection"
-			probe.position = Vector3(center.x, level + 2.0, center.y)
-			probe.size = Vector3(tile.x + PROBE_MARGIN * 2.0, 10.0, tile.y + PROBE_MARGIN * 2.0)
-			probe.origin_offset = Vector3(0.0, -1.75, 0.0)
-			probe.surface_rect = Rect2(bounds.position + tile * Vector2(x, y), tile)
-			probe.surface_level = level
-			probe.ground_masked = ground_masked
-			probe.box_projection = true
-			# 靜態場景和倒影方向光。角色紙片、水面與主鏡頭方向光在各自的層。
-			probe.cull_mask = 1 | TimeOfDay.REFLECTION_SUN_LAYER
-			probe.reflection_mask = LAYER
-			probe.ambient_mode = ReflectionProbe.AMBIENT_DISABLED
-			probe.enable_shadows = true
-			probe.update_mode = ReflectionProbe.UPDATE_ONCE
-			probe.max_distance = TimeOfDay.REFLECTION_CAPTURE_DISTANCE
-			parent.add_child(probe)
+	if parent.is_inside_tree():
+		_ensure_world_reflection(parent, rects, level)
+	else:
+		parent.ready.connect(func() -> void: _ensure_world_reflection(parent, rects, level), CONNECT_ONE_SHOT)
 
 
-## 小水面優先共用附近水域的倒影，場景放完後才替未覆蓋區補一個局部探針。
+## 小水面優先共用同場景的平面鏡像反射；場景放完後若仍無反射節點才補建一個。
 static func share_reflection(parent: Node3D, rects: Array, level: float) -> void:
 	parent.ready.connect(func() -> void: _ensure_coverage.call_deferred(parent, rects, level), CONNECT_ONE_SHOT)
 
@@ -68,17 +83,11 @@ static func share_reflection(parent: Node3D, rects: Array, level: float) -> void
 static func _ensure_coverage(parent: Variant, rects: Array, level: float) -> void:
 	if not is_instance_valid(parent) or not parent.is_inside_tree() or parent.is_queued_for_deletion():
 		return
-	for rect: Rect2 in rects:
-		for corner: Vector2 in [rect.position, rect.end, Vector2(rect.position.x, rect.end.y), Vector2(rect.end.x, rect.position.y)]:
-			var point: Vector3 = parent.to_global(Vector3(corner.x, level, corner.y))
-			var covered := false
-			for probe: ReflectionProbe in parent.get_tree().get_nodes_in_group("water_reflections"):
-				if probe.get_world_3d() == parent.get_world_3d() and AABB(-probe.size * 0.5, probe.size).has_point(probe.to_local(point)):
-					covered = true
-					break
-			if not covered:
-				add_reflections(parent, rects, level)
-				return
+	var host := _find_owner(parent)
+	for node in host.get_children():
+		if node is Reflection:
+			return
+	_ensure_world_reflection(parent, rects, level)
 
 
 ## 將矩形聯集切成互不重疊的長條，避免共面水片的深度競爭與重複繪製。

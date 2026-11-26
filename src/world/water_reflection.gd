@@ -1,102 +1,137 @@
-extends ReflectionProbe
-## 快取附近景物，補上螢幕外的倒影。只在光影時段完成切換時重新捕捉。
+class_name WaterReflection
+extends Node
+## 即時平面鏡像水反（Planar Reflection）：以半解析度鏡像鏡頭即時渲染水面以上的天空、
+## 建築、暖窗、路燈、樹木、傳送門、祭壇與主角，再由 water.gdshader 以像素波紋扭曲合成。
 
 const GROUP := "water_reflections"
-var surface_rect := Rect2()
+const RESOLUTION_SCALE := 0.5
+const MIN_SIZE := Vector2i(320, 180)
+const MAX_SIZE := Vector2i(960, 540)
+const CULL_MASK := 1 | 2 | TimeOfDay.REFLECTION_SUN_LAYER
+
 var surface_level := 0.0
-var ground_masked := false
-var _refresh_pending := false
-var _requested_lighting: Dictionary = {}
-var _last_lighting: Dictionary = {}
-var _rest_position := Vector3.ZERO
-var _offset_sign := -1.0
+var primary_area := 0.0
+var viewport: SubViewport
+var camera: Camera3D
+var _bound_mats: Dictionary = {}
+var _active := false
+
+
+## 計算跨水平面 y = plane_y 的右手系鏡像變換（不翻轉背面剔除，UV 對應 (u, 1 - v)）。
+static func mirror_transform(src: Transform3D, plane_y: float) -> Transform3D:
+	var rx := Vector3(src.basis.x.x, -src.basis.x.y, src.basis.x.z).normalized()
+	var rz := Vector3(src.basis.z.x, -src.basis.z.y, src.basis.z.z).normalized()
+	var ry := rz.cross(rx).normalized()
+	var origin := Vector3(src.origin.x, 2.0 * plane_y - src.origin.y, src.origin.z)
+	return Transform3D(Basis(rx, ry, rz), origin)
 
 
 func _ready() -> void:
-	_rest_position = position
+	# 排在 CameraRig._process 之後，確保同一幀就跟上主鏡頭最新位置。
+	process_priority = 100
 	add_to_group(GROUP)
-	if ground_masked:
-		_place_capture_over_water()
-		var world := _world()
-		if world != null:
-			# populate 的後半段還會放瀑布和河石；世界 ready 才做最後一次定位，
-			# 此時尚未合批，仍能用真正方塊判斷遮擋，不能拿巨大合批包圍盒代替。
-			world.ready.connect(_place_capture_over_water, CONNECT_ONE_SHOT)
+	viewport = SubViewport.new()
+	viewport.name = "PlanarReflectionViewport"
+	viewport.transparent_bg = false
+	viewport.own_world_3d = false
+	viewport.msaa_3d = Viewport.MSAA_DISABLED
+	viewport.screen_space_aa = Viewport.SCREEN_SPACE_AA_DISABLED
+	viewport.use_taa = false
+	# 反射畫面仍保留點光源照明與方向光陰影，但不重複繪製每盞路燈／火盆的雙拋物面陰影圖，省下數百次 draw call。
+	viewport.positional_shadow_atlas_size = 0
+	viewport.size = Vector2i(640, 360)
+	_active = DisplayServer.get_name() != "headless"
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS if _active else SubViewport.UPDATE_DISABLED
+	add_child(viewport)
+
+	camera = Camera3D.new()
+	camera.name = "PlanarReflectionCamera"
+	camera.cull_mask = CULL_MASK
+	camera.current = true
+	var parent_world := get_parent() as GameWorld
+	if parent_world != null and not parent_world.def.outer_ground:
+		# 室內地城沒有天花板網格；鏡像鏡頭改用深色穹頂背景，避免水渠倒映出室外天空。
+		var indoor_env := Environment.new()
+		indoor_env.background_mode = Environment.BG_COLOR
+		indoor_env.background_color = Color("#060812")
+		indoor_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+		indoor_env.ambient_light_color = Color("#3a4272")
+		indoor_env.ambient_light_energy = 0.72
+		indoor_env.tonemap_mode = Environment.TONE_MAPPER_ACES
+		indoor_env.tonemap_white = 6.0
+		camera.environment = indoor_env
+	viewport.add_child(camera)
+
+	_apply_clip_plane()
+	_bind_water_materials.call_deferred()
 
 
-func _world() -> GameWorld:
-	var world := get_parent()
-	while world != null and not world is GameWorld:
-		world = world.get_parent()
-	return world as GameWorld
+func register_surface(level: float, area: float) -> void:
+	if area >= primary_area or primary_area <= 0.0:
+		primary_area = area
+		surface_level = level
+		_apply_clip_plane()
 
 
-## 河面矩形有大部分藏在河岸下；拍攝點必須落在真正露出的水域，避開橋底。
-func _place_capture_over_water() -> void:
-	var world := _world()
-	if world == null:
+func _apply_clip_plane() -> void:
+	if is_inside_tree():
+		RenderingServer.global_shader_parameter_set("water_reflection_y", surface_level)
+
+
+func _process(_delta: float) -> void:
+	var main_vp := get_viewport()
+	if main_vp == null:
 		return
-	var def: SceneDef = world.def
-	var capture_y: float = get_parent().to_global(Vector3(0, surface_level + 0.25, 0)).y
-	var blockers: Array[AABB] = []
-	for node in world.find_children("*", "MeshInstance3D", true, false):
+	var main_cam := main_vp.get_camera_3d()
+	if main_cam != null and main_cam != camera:
+		sync_to_camera(main_cam, main_vp.get_visible_rect().size)
+	_bind_water_materials()
+
+
+func sync_to_camera(main_cam: Camera3D, main_size: Vector2 = Vector2(1280, 720)) -> void:
+	if camera == null or viewport == null or main_cam == null:
+		return
+	var target_w := clampi(int(round(main_size.x * RESOLUTION_SCALE)), MIN_SIZE.x, MAX_SIZE.x)
+	var target_h := clampi(int(round(main_size.y * RESOLUTION_SCALE)), MIN_SIZE.y, MAX_SIZE.y)
+	var target_size := Vector2i(target_w, target_h)
+	if viewport.size != target_size:
+		viewport.size = target_size
+	camera.projection = main_cam.projection
+	camera.fov = main_cam.fov
+	camera.size = main_cam.size
+	camera.near = main_cam.near
+	camera.far = minf(main_cam.far, 72.0)
+	camera.global_transform = mirror_transform(main_cam.global_transform, surface_level)
+	_apply_clip_plane()
+
+
+func _bind_water_materials() -> void:
+	if not is_inside_tree() or viewport == null:
+		return
+	var tex := viewport.get_texture()
+	var enable := 1.0 if _active and tex != null else 0.0
+	for node in get_tree().get_nodes_in_group("water_surfaces"):
 		var mesh := node as MeshInstance3D
-		if not mesh.mesh is BoxMesh or (mesh.layers & cull_mask) == 0:
+		if mesh == null:
 			continue
-		var material := mesh.get_active_material(0)
-		if material is BaseMaterial3D and material.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED:
+		var mat := mesh.material_override as ShaderMaterial
+		if mat == null:
 			continue
-		var box := (mesh.global_transform * mesh.get_aabb()).grow(0.05)
-		if box.position.y <= capture_y + 0.75 and box.end.y >= capture_y:
-			blockers.append(box)
-	var best_distance := INF
-	var best := global_position + global_basis * origin_offset
-	# 寬河優先離岸一公尺；只有兩格寬的水道改用較小岸距，橋距不縮小。
-	for clearance: float in [1.0, 0.4]:
-		for z in range(floori(surface_rect.position.y), ceili(surface_rect.end.y)):
-			for x in range(floori(surface_rect.position.x), ceili(surface_rect.end.x)):
-				var local := Vector3(x + 0.5, surface_level + 0.25, z + 0.5)
-				if not surface_rect.has_point(Vector2(local.x, local.z)):
-					continue
-				var candidate: Vector3 = get_parent().to_global(local)
-				var p: Vector3 = world.to_local(candidate)
-				var clear := true
-				for offset: Vector2 in [Vector2.ZERO, Vector2(1, 0), Vector2(-1, 0), Vector2(0, 1), Vector2(0, -1)]:
-					if not def.is_void(Vector2(p.x, p.z) + offset * clearance) or def.on_bridge(Vector2(p.x, p.z) + offset):
-						clear = false
-						break
-				if clear:
-					for box: AABB in blockers:
-						if candidate.x >= box.position.x and candidate.x <= box.end.x \
-								and candidate.z >= box.position.z and candidate.z <= box.end.z:
-							clear = false
-							break
-				var distance := candidate.distance_squared_to(global_position)
-				if clear and distance < best_distance:
-					best_distance = distance
-					best = candidate
-		if is_finite(best_distance):
-			break
-	if is_finite(best_distance):
-		origin_offset = to_local(best)
+		var id := mat.get_instance_id()
+		if _bound_mats.get(id, 0.0) != enable or mat.get_shader_parameter("reflection_tex") != tex:
+			mat.set_shader_parameter("reflection_tex", tex)
+			mat.set_shader_parameter("has_reflection", enable)
+			_bound_mats[id] = enable
 
 
-## 同一幀的請求以最後的光影為準。空字典供需要重新捕捉場景幾何的呼叫使用。
-func refresh(lighting: Dictionary = {}) -> void:
-	_requested_lighting = lighting
-	if _refresh_pending:
-		return
-	_refresh_pending = true
-	_refresh.call_deferred()
+## 與 TimeOfDay 介面相容：平面鏡像每幀即時更新，切時段時只需確保材質與裁切面同步。
+func refresh(_lighting: Dictionary = {}) -> void:
+	_apply_clip_plane()
+	_bind_water_materials()
 
 
-func _refresh() -> void:
-	_refresh_pending = false
-	if not is_inside_tree() or is_queued_for_deletion():
-		return
-	if not _requested_lighting.is_empty() and _requested_lighting == _last_lighting:
-		return
-	_last_lighting = _requested_lighting
-	# UPDATE_ONCE 依 transform 變更重拍；來回位移避免多次切換後累積漂移。
-	_offset_sign = -_offset_sign
-	position = _rest_position + Vector3(0.001 * _offset_sign, 0.0, 0.0)
+func _exit_tree() -> void:
+	if viewport != null:
+		viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	_bound_mats.clear()
+	RenderingServer.global_shader_parameter_set("water_reflection_y", -1000.0)
