@@ -16,6 +16,7 @@ uniform float emission_strength = 1.45;
 uniform vec3 bounce_color : source_color = vec3(1.0, 0.72, 0.41);
 uniform float bounce_energy = 0.0;
 uniform float bounce_dir_x = -0.82;
+uniform float wet_amount = 0.0;
 
 varying vec3 v_right;
 varying vec3 v_up;
@@ -51,7 +52,7 @@ void vertex() {
 
 void fragment() {
 	vec4 tex = texture(albedo_tex, UV);
-	ALBEDO = tex.rgb;
+	ALBEDO = mix(tex.rgb, tex.rgb * vec3(0.72, 0.84, 0.98), clamp(wet_amount, 0.0, 1.0));
 	ALPHA = tex.a;
 	ALPHA_SCISSOR_THRESHOLD = 0.5;
 
@@ -62,15 +63,16 @@ void fragment() {
 	NORMAL = normalize(v_right * n_local.x + v_up * n_local.y + v_forward * n_local.z);
 
 	vec4 mat_data = texture(material_tex, UV);
-	ROUGHNESS = mat_data.r;
+	ROUGHNESS = mix(mat_data.r, 0.14, clamp(wet_amount, 0.0, 1.0));
 	METALLIC = mat_data.g;
-	SPECULAR = mix(0.35, 0.9, mat_data.g);
+	SPECULAR = mix(mix(0.35, 0.9, mat_data.g), 0.88, clamp(wet_amount, 0.0, 1.0));
 	v_rim_mask = mat_data.b;
 
 	vec3 crystal_emi = tex.rgb * mat_data.a * emission_strength;
 	float side_face = clamp(dot(n_local, normalize(vec3(bounce_dir_x, 0.22, 0.58))), 0.0, 1.0);
 	vec3 bounce_emi = tex.rgb * bounce_color * bounce_energy * side_face * (0.45 + 0.55 * v_rim_mask);
-	EMISSION = crystal_emi + bounce_emi;
+	vec3 wet_rim = vec3(0.18, 0.58, 0.92) * clamp(wet_amount, 0.0, 1.0) * v_rim_mask * 0.26;
+	EMISSION = crystal_emi + bounce_emi + wet_rim;
 }
 
 void light() {

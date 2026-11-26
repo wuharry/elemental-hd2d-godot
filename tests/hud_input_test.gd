@@ -177,7 +177,9 @@ func _run() -> void:
 	# 6. 長按元素鍵不會加入元素（那是護盾的操作）
 	player.queue.clear()
 	_touch(0, water["c"], true)
-	await create_timer(0.5).timeout
+	await create_timer(player.shield_hold_seconds + 0.1).timeout
+	_check(player.combat_state.shield_element == Elements.Type.WATER,
+		"手指仍按住時，達到門檻即啟動水盾")
 	_touch(0, water["c"], false)
 	await _frames(3)
 	_check(player.queue.is_empty(), "長按是護盾操作，不應加入元素")

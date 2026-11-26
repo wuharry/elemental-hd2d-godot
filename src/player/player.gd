@@ -4,7 +4,10 @@ extends CharacterBody3D
 ## 移動方向由外部塞進 move_input（HUD 搖桿或鍵盤），這裡不直接讀觸控。
 
 signal cast(elements: Array[int], origin: Vector3, direction: Vector3)
+signal spell_cast(spell: Dictionary, origin: Vector3, direction: Vector3)
 signal loadout_changed
+signal notice(text: String)
+signal casting_changed
 
 const SPEED := 5.2
 const CharacterAnimation := preload("res://src/player/character_animation.gd")
@@ -33,6 +36,15 @@ const BREATH_PERIOD := 0.8
 
 var queue := ElementQueue.new()
 var loadout := Elements.LOADOUT.duplicate()
+var knowledge := SpellKnowledge.new()
+var combat_state := CombatState.new()
+var armed_shortcut := -1
+var shield_hold_seconds := 1.5:
+	set(value):
+		shield_hold_seconds = clampf(value, 1.0, 3.0) if is_finite(value) else 1.5
+var _element_holds: Dictionary = {}
+var training_mode := false
+var _revive_time := 0.0
 ## 搖桿輸入，x 右、y 下（螢幕方向），長度 0..1。
 var move_input := Vector2.ZERO
 ## 右搖桿的螢幕方向；非零時瞄準優先於移動面向。
@@ -149,12 +161,26 @@ func _make_char_material(albedo: Texture2D, normal: Texture2D, material_map: Tex
 func replace_element(slot: int, element: int) -> void:
 	if slot < 0 or slot >= loadout.size() or not Elements.SELECTABLE.has(element) or loadout.has(element):
 		return
+	cancel_element_holds()
 	loadout[slot] = element
 	loadout_changed.emit()
 
 
 func _physics_process(delta: float) -> void:
 	_t += delta
+	combat_state.tick(delta)
+	if combat_state.health <= 0.0:
+		cancel_element_holds()
+		velocity = Vector3.ZERO
+		if training_mode:
+			_revive_time += delta
+			if _revive_time >= 2.0:
+				combat_state.reset()
+				_revive_time = 0.0
+				notice.emit("訓練恢復 · 生命已回滿")
+		return
+	_revive_time = 0.0
+	_tick_element_holds(delta)
 	var input := move_input
 	if accept_keyboard:
 		var kb := Vector2(
@@ -163,8 +189,13 @@ func _physics_process(delta: float) -> void:
 		if kb != Vector2.ZERO:
 			input = kb.normalized()
 	var dir := Vector3(input.x, 0, input.y).rotated(Vector3.UP, camera_yaw)
-	velocity.x = dir.x * SPEED
-	velocity.z = dir.z * SPEED
+	var move_speed := SPEED
+	if combat_state.has_status("frozen") or combat_state.has_status("rooted"):
+		move_speed = 0.0
+	elif combat_state.has_status("slow"):
+		move_speed *= 0.5
+	velocity.x = dir.x * move_speed
+	velocity.z = dir.z * move_speed
 	velocity.y = 0.0 if is_on_floor() else velocity.y - 20.0 * delta
 	move_and_slide()
 
@@ -228,12 +259,14 @@ func _refresh_sprite() -> void:
 		var pulse := maxf(0.0, equipped_weapon.light_energy + sin(_t * 3.0) * equipped_weapon.light_pulse)
 		bounce_energy = clampf(pulse * 0.18, 0.0, 0.24)
 		bounce_col = equipped_weapon.light_color
+	var wet := 1.0 if combat_state.has_status("wet") else 0.0
 	for mat: ShaderMaterial in [_body_mat, _hand_mat]:
 		if mat != null:
 			mat.set_shader_parameter("flip_sign", flip_sign)
 			mat.set_shader_parameter("bounce_dir_x", bounce_dir)
 			mat.set_shader_parameter("bounce_energy", bounce_energy)
 			mat.set_shader_parameter("bounce_color", bounce_col)
+			mat.set_shader_parameter("wet_amount", wet)
 	var grip := GRIP + Vector2(staff_offset) - FEET
 	grip.y = -grip.y
 	weapon.pose(grip, mirrored, PIXEL, _stretch, camera_yaw, camera_ray * LAYER_DEPTH, _t)
@@ -263,10 +296,90 @@ func equip_weapon(appearance: WeaponAppearance) -> void:
 
 ## 把目前佇列放出去（清空佇列）。direction 是水平世界方向。
 func cast_queue(direction: Vector3) -> void:
-	if queue.is_empty():
+	if combat_state.health <= 0.0:
+		return
+	var spell: Dictionary
+	if armed_shortcut >= 0:
+		spell = knowledge.shortcut_spell(armed_shortcut)
+	else:
+		spell = knowledge.manual_spell(queue.slots)
+	if spell.is_empty():
 		return
 	if direction.length() > 0.01:
 		aim_dir = direction.normalized()
 	_refresh_sprite()
-	var elements := queue.take_all()
-	cast.emit(elements, global_position + Vector3(0, 0.9, 0) + aim_dir * 0.5, aim_dir)
+	if armed_shortcut < 0:
+		queue.clear()
+	armed_shortcut = -1
+	casting_changed.emit()
+	var origin := global_position + Vector3(0, 0.9, 0) + aim_dir * 0.5
+	cast.emit(spell["elements"], origin, aim_dir)
+	spell_cast.emit(spell, origin, aim_dir)
+	notice.emit(spell["name"])
+
+
+func arm_shortcut(slot: int) -> bool:
+	if knowledge.shortcut_spell(slot).is_empty():
+		notice.emit("在魔術師工坊裝備已熟練的法術")
+		return false
+	armed_shortcut = -1 if armed_shortcut == slot else slot
+	casting_changed.emit()
+	return true
+
+
+func cancel_cast_selection() -> void:
+	armed_shortcut = -1
+	casting_changed.emit()
+
+
+func has_prepared_spell() -> bool:
+	return not queue.is_empty() or armed_shortcut >= 0
+
+
+## 觸控與鍵盤共用長按計時；成功開盾的那次放開不能再加入元素。
+func begin_element_hold(source: String, slot: int) -> bool:
+	if combat_state.health <= 0.0 or slot < 0 or slot >= loadout.size() or _element_holds.has(source):
+		return false
+	for hold: Dictionary in _element_holds.values():
+		if hold["slot"] == slot:
+			return false
+	_element_holds[source] = {"slot": slot, "element": loadout[slot], "elapsed": 0.0, "triggered": false}
+	return true
+
+
+func finish_element_hold(source: String, cancelled: bool = false) -> void:
+	if not _element_holds.has(source):
+		return
+	var hold: Dictionary = _element_holds[source]
+	_element_holds.erase(source)
+	if cancelled or hold["triggered"] or loadout[hold["slot"]] != hold["element"]:
+		return
+	if not queue.add(hold["element"]):
+		notice.emit("佇列已滿（四格）")
+
+
+func cancel_element_holds() -> void:
+	_element_holds.clear()
+
+
+func hold_progress(slot: int) -> float:
+	for hold: Dictionary in _element_holds.values():
+		if hold["slot"] == slot:
+			return minf(float(hold["elapsed"]) / shield_hold_seconds, 1.0)
+	return 0.0
+
+
+func _tick_element_holds(delta: float) -> void:
+	for hold: Dictionary in _element_holds.values():
+		hold["elapsed"] += delta
+		if not hold["triggered"] and hold["elapsed"] >= shield_hold_seconds:
+			hold["triggered"] = true
+			if combat_state.activate_shield(hold["element"]):
+				notice.emit("%s盾 · 可以放開繼續組招" % Elements.display_name(hold["element"]))
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		cancel_element_holds()
+		move_input = Vector2.ZERO
+		aim_input = Vector2.ZERO

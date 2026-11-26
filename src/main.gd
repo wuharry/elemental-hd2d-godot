@@ -28,6 +28,12 @@ var _options: Dictionary
 var _nearby_action := ""
 var _gate_charging := false
 var current_season := "summer"
+var spell_runtime: Node3D
+var workshop: CanvasLayer
+var _keyboard_holds: Dictionary = {}
+var _input_altar := -1
+var _save_timer: Timer
+var _persist_profile := false
 
 
 func _ready() -> void:
@@ -50,7 +56,17 @@ func _ready() -> void:
 	player = Player.new()
 	player.position = def.player_start
 	add_child(player)
-	player.cast.connect(_on_cast)
+	player.spell_cast.connect(_on_spell_cast)
+	_persist_profile = not args.has("--capture") and not OS.get_cmdline_args().has("--script")
+	if _persist_profile:
+		_persist_profile = MageProfile.restore(player)
+	_save_timer = Timer.new()
+	_save_timer.one_shot = true
+	_save_timer.wait_time = 0.6
+	_save_timer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(_save_timer)
+	_save_timer.timeout.connect(_save_profile)
+	player.knowledge.changed.connect(_schedule_save)
 
 	rig = CameraRig.new()
 	rig.target = player
@@ -69,6 +85,14 @@ func _ready() -> void:
 		hud.element_replacement_requested.connect(_replace_at_altar)
 		hud.season_requested.connect(set_season)
 		hud.weather_toggled.connect(toggle_weather)
+		hud.settings_requested.connect(_open_workshop.bind(true))
+		if not _persist_profile and not args.has("--capture") and not OS.get_cmdline_args().has("--script"):
+			player.notice.emit("存檔無法讀取，已保留原檔；本次不覆寫")
+
+	workshop = preload("res://src/ui/mage_workshop.gd").new()
+	add_child(workshop)
+	workshop.settings_changed.connect(_schedule_save)
+	workshop.closed.connect(_close_workshop)
 
 	if preview_altar:
 		_place_player(def.element_altars[Elements.Type.EARTH])
@@ -79,6 +103,8 @@ func _ready() -> void:
 	time_of_day.apply_scene(def)
 	time_of_day.set_weather(_options["weather"], true)
 	time_of_day.set_time(_options["time"], true)
+	time_of_day.weather_changed.connect(_on_weather_changed)
+	_setup_combat()
 	_sync_hud_environment()
 	_update_window_title()
 
@@ -115,8 +141,13 @@ func _nearest_interaction() -> String:
 
 func _update_interaction() -> void:
 	_nearby_action = _nearest_interaction()
+	var altar := _nearest_altar()
+	if altar != _input_altar:
+		_input_altar = altar
+		_keyboard_holds.clear()
+		player.cancel_element_holds()
 	if hud:
-		hud.set_interaction(_nearby_action, _nearest_altar())
+		hud.set_interaction(_nearby_action, altar)
 
 
 func _nearest_altar() -> int:
@@ -137,14 +168,6 @@ func _replace_at_altar(slot: int, element: int) -> void:
 		player.replace_element(slot, element)
 
 
-func _use_element_slot(slot: int) -> void:
-	var element := _nearest_altar()
-	if element >= 0:
-		_replace_at_altar(slot, element)
-	else:
-		player.queue.add(player.loadout[slot])
-
-
 func interact() -> void:
 	if _gate_charging:
 		return
@@ -155,6 +178,16 @@ func interact() -> void:
 	match _nearby_action:
 		"to_altar", "to_village":
 			_travel_through_gate(_nearby_action)
+		"mage_workshop":
+			_open_workshop()
+		"rain_book":
+			if player.knowledge.unlock_named("rain"):
+				player.notice.emit("學會降雨 · [霧][水][水] · 工坊可切換普通施法")
+			else:
+				player.notice.emit("降雨已學會 · 水＋冰融合成霧，再加入水、水")
+			spell_runtime.refresh_book()
+		"training_turret":
+			spell_runtime.toggle_turret()
 
 
 func _travel_through_gate(action: String) -> void:
@@ -186,6 +219,7 @@ func _place_player(point: Vector2) -> void:
 func switch_scene(id: String) -> void:
 	if not Scenes.LIST.has(id) or world.def.id == id:
 		return
+	_cancel_input()
 	for bolt in get_tree().get_nodes_in_group("spell_previews"):
 		bolt.free()
 	world.free()
@@ -197,6 +231,7 @@ func switch_scene(id: String) -> void:
 	player.velocity = Vector3.ZERO
 	rig.global_position = player.position + rig.look_offset
 	time_of_day.apply_scene(def)
+	_setup_combat()
 	_update_interaction()
 	_sync_hud_environment()
 	_update_window_title()
@@ -207,6 +242,7 @@ func set_season(season_name: String) -> void:
 		return
 	current_season = season_name
 	if world.def.supports_seasons:
+		_cancel_input()
 		var scene_id := world.def.id
 		var saved_pos := player.position
 		var saved_aim := player.aim_dir
@@ -220,6 +256,7 @@ func set_season(season_name: String) -> void:
 		player.velocity = Vector3.ZERO
 		rig.global_position = player.position + rig.look_offset
 		time_of_day.apply_scene(def)
+		_setup_combat()
 		_update_interaction()
 	_sync_hud_environment()
 	_update_window_title()
@@ -258,7 +295,26 @@ func _batch_world() -> void:
 
 func _unhandled_key_input(event: InputEvent) -> void:
 	var key := event as InputEventKey
-	if key == null or not key.pressed or key.echo or _gate_charging:
+	if key == null or key.echo or _gate_charging:
+		return
+	if key.physical_keycode in [KEY_1, KEY_2, KEY_3, KEY_4]:
+		var slot := int(key.physical_keycode - KEY_1)
+		var source := "key_%d" % slot
+		if key.pressed:
+			if not _keyboard_holds.has(source):
+				_keyboard_holds[source] = _nearest_altar()
+				if _keyboard_holds[source] < 0:
+					player.begin_element_hold(source, slot)
+		else:
+			if _keyboard_holds.has(source):
+				var altar: int = _keyboard_holds[source]
+				_keyboard_holds.erase(source)
+				if altar >= 0 and _nearest_altar() == altar:
+					_replace_at_altar(slot, altar)
+				else:
+					player.finish_element_hold(source, _nearest_altar() >= 0)
+		return
+	if not key.pressed:
 		return
 	match key.physical_keycode:
 		KEY_F1: time_of_day.set_time("morning")
@@ -277,23 +333,76 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		KEY_G: next_season()
 		KEY_R: toggle_weather()
 		KEY_E: interact()
-		KEY_1: _use_element_slot(0)
-		KEY_2: _use_element_slot(1)
-		KEY_3: _use_element_slot(2)
-		KEY_4: _use_element_slot(3)
+		KEY_Z: player.arm_shortcut(0)
+		KEY_X: player.arm_shortcut(1)
+		KEY_C: player.arm_shortcut(2)
 		KEY_F: player.queue.fuse_last_two()
 		KEY_SPACE: player.cast_queue(player.aim_dir)
-		KEY_ESCAPE: get_tree().quit()
+		KEY_ESCAPE:
+			_save_profile()
+			get_tree().quit()
 
 
-func _on_cast(elements: Array[int], origin: Vector3, direction: Vector3) -> void:
-	if not ResourceLoader.exists("res://src/combat/spell_bolt.gd"):
-		return
-	var bolt := Node3D.new()
-	bolt.add_to_group("spell_previews")
-	bolt.set_script(load("res://src/combat/spell_bolt.gd"))
-	add_child(bolt)
-	bolt.call("launch", elements, origin, direction)
+func _on_spell_cast(spell: Dictionary, origin: Vector3, direction: Vector3) -> void:
+	spell_runtime.cast_spell(spell, origin, direction)
+
+
+func _setup_combat() -> void:
+	var training := not world.def.training_targets.is_empty()
+	# 原型只有訓練傷害；離開訓練場恢復，避免未定案死亡流程鎖住探索。
+	if player.training_mode and not training:
+		player.combat_state.reset()
+	player.training_mode = training
+	spell_runtime = preload("res://src/world/spell_runtime.gd").new()
+	world.add_child(spell_runtime)
+	spell_runtime.setup(player, time_of_day, player.knowledge)
+	spell_runtime.feedback.connect(player.notice.emit)
+
+
+func _open_workshop(settings_only: bool = false) -> void:
+	_cancel_input()
+	if hud != null:
+		hud.set_process_input(false)
+	workshop.open(player, settings_only)
+
+
+func _close_workshop() -> void:
+	if hud != null:
+		hud.set_process_input(true)
+	_save_profile()
+
+
+func _cancel_input() -> void:
+	_keyboard_holds.clear()
+	player.cancel_element_holds()
+	player.move_input = Vector2.ZERO
+	player.aim_input = Vector2.ZERO
+	player.cancel_cast_selection()
+	if hud != null:
+		hud.cancel_input()
+
+
+func _on_weather_changed(_weather: String) -> void:
+	_sync_hud_environment()
+	_update_window_title()
+
+
+func _schedule_save() -> void:
+	if _persist_profile:
+		_save_timer.start()
+
+
+func _save_profile() -> void:
+	if _persist_profile and MageProfile.save(player) != OK:
+		player.notice.emit("設定儲存失敗；本次遊戲仍可繼續使用")
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and is_instance_valid(player):
+		_cancel_input()
+		_save_profile()
+	elif what == NOTIFICATION_WM_CLOSE_REQUEST and is_instance_valid(player):
+		_save_profile()
 
 
 func _read_options(args: PackedStringArray) -> Dictionary:

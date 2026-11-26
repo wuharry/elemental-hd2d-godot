@@ -115,7 +115,9 @@ static func _void_colliders(root: Node3D, def: SceneDef) -> void:
 			elif not blocked and inside:
 				inside = false
 				var w := (xi - start) * CELL
-				Build.collider(root, Vector3(w, 4.0, CELL), Vector3(start * CELL + w * 0.5, 2.0, (zi + 0.5) * CELL))
+				var barrier := Build.collider(root, Vector3(w, 4.0, CELL), Vector3(start * CELL + w * 0.5, 2.0, (zi + 0.5) * CELL))
+				# 只限制角色走入水／裂谷；空氣中的法術不撞這道隱形牆。
+				barrier.set_meta("spell_passthrough", true)
 
 
 ## 路徑遮罩：R = 路面、G = 裸土。256px 蓋整個核心區，shader 裡再對齊像素格。

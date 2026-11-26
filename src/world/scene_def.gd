@@ -24,6 +24,9 @@ var player_start := Vector3.ZERO
 var interactions: Dictionary = {}
 ## 元素 ID → 祭壇前的可互動站位（XZ）。
 var element_altars: Dictionary[int, Vector2] = {}
+## 訓練場資料；由 SpellRuntime 建立有狀態的木樁與控制台。
+var training_targets: Array[Vector2] = []
+var training_turret := Vector2.INF
 ## 玩家可走的範圍（中心 0,0）。
 var play_half := Vector2(30.0, 17.0)
 

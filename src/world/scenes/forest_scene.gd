@@ -12,13 +12,21 @@ const ALTAR_SPACING := 1.60
 # 固定原有六座的左端，新增祭壇只向右延伸，既有抵達點與通道不平移。
 const ALTAR_ROW_START := SHRINE - Vector2(4.0, 0)
 const ALTAR_STAND_OFFSET := Vector2(0, 1.95)
+const TRAINING_CLEARING := Rect2(11.5, -7.5, 8.5, 8.0)
 
 
 func _init() -> void:
 	id = "forest"
 	title = "森林河谷"
 	player_start = Vector3(4.0, 0.0, 1.2)
-	interactions = {"to_village": Vector2(2.1, -9.8)}
+	interactions = {
+		"to_village": Vector2(2.1, -9.8),
+		"mage_workshop": Vector2(10, -1.5),
+		"rain_book": Vector2(13, -3),
+		"training_turret": Vector2(18, 0),
+	}
+	training_targets = [Vector2(14, -5.5), Vector2(16, -5.5), Vector2(18, -5.5)]
+	training_turret = Vector2(18, -1.5)
 	for i in ALTAR_ORDER.size():
 		element_altars[ALTAR_ORDER[i]] = ALTAR_ROW_START + Vector2(i * ALTAR_SPACING, 0) + ALTAR_STAND_OFFSET
 	play_half = Vector2(30.0, 19.0)
@@ -28,6 +36,7 @@ func _init() -> void:
 		{"pts": [Vector2(-40, 2), Vector2(-16, 1), Vector2(-5, 0), Vector2(1, 0), Vector2(10, -1.5), Vector2(22, -3), Vector2(40, -2)], "width": 2.2},
 		{"pts": [Vector2(10, -1.5), Vector2(11, -6), SHRINE + ALTAR_STAND_OFFSET], "width": 1.6},
 		{"pts": [interactions["to_village"], aisle_left, aisle_right], "width": 2.2},
+		{"pts": [Vector2(11, -4), Vector2(18.5, -4)], "width": 3.5},
 	]
 	dirt_spots = [{"c": CAMP, "r": 2.6}, {"c": interactions["to_village"], "r": 2.2}]
 	for stand: Vector2 in element_altars.values():
@@ -58,7 +67,15 @@ func is_void(p: Vector2) -> bool:
 	return false
 
 
+func can_grow(p: Vector2) -> bool:
+	if TRAINING_CLEARING.grow(0.6).has_point(p):
+		return false
+	return super.can_grow(p)
+
+
 func populate(w: GameWorld) -> void:
+	# 夜間仍要看清標的與書台；沿用村莊路燈與既有時段亮度，不提高全場曝光。
+	w.place(PropBuilder.lamp_post(false), Vector2(12, -5.7))
 	w.add_child(SetPieces.water_fill(Rect2(-16, -48, 28, 96), -0.4, Vector2(0.15, 0.9), Color("#123038"), Color("#2a5c60"), true))
 	w.place(SetPieces.plank_bridge(6.4, 2.5), Vector2(-2.0, 0.0))
 	var fall := w.place(SetPieces.waterfall(4.6, 3.4), Vector2(-10.0, -23.5))

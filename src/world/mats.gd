@@ -163,6 +163,61 @@ static func altar_surface(kind: String) -> ShaderMaterial:
 	return _cache[key]
 
 
+## 霧場使用固定數量的像素面片；軟邊在 shader 量化，不放巨大不透明方塊。
+static func spell_mist() -> ShaderMaterial:
+	const KEY := "spell_mist"
+	if not _cache.has(KEY):
+		var mat := ShaderMaterial.new()
+		mat.shader = preload("res://shaders/spell_mist.gdshader")
+		_cache[KEY] = mat
+	return _cache[KEY]
+
+
+static func shield_circle() -> ShaderMaterial:
+	const KEY := "shield_circle"
+	if not _cache.has(KEY):
+		var mat := ShaderMaterial.new()
+		mat.shader = preload("res://shaders/shield_circle.gdshader")
+		_cache[KEY] = mat
+	return _cache[KEY]
+
+
+static func shield_aura() -> ShaderMaterial:
+	const KEY := "shield_aura"
+	if not _cache.has(KEY):
+		var mat := ShaderMaterial.new()
+		mat.shader = preload("res://shaders/shield_aura.gdshader")
+		_cache[KEY] = mat
+	return _cache[KEY]
+
+
+static func spell_zone_pool() -> ShaderMaterial:
+	const KEY := "spell_zone_pool"
+	if not _cache.has(KEY):
+		var mat := ShaderMaterial.new()
+		mat.shader = preload("res://shaders/spell_zone_pool.gdshader")
+		_cache[KEY] = mat
+	return _cache[KEY]
+
+
+static func spell_orb() -> ShaderMaterial:
+	const KEY := "spell_orb"
+	if not _cache.has(KEY):
+		var mat := ShaderMaterial.new()
+		mat.shader = preload("res://shaders/spell_orb.gdshader")
+		_cache[KEY] = mat
+	return _cache[KEY]
+
+
+static func status_wet_puddle() -> ShaderMaterial:
+	const KEY := "status_wet_puddle"
+	if not _cache.has(KEY):
+		var mat := ShaderMaterial.new()
+		mat.shader = preload("res://shaders/status_wet_puddle.gdshader")
+		_cache[KEY] = mat
+	return _cache[KEY]
+
+
 ## 能量的外緣保留元素色，核心輸出 HDR；不依賴 unshaded 會忽略的 EMISSION。
 static func altar_energy(color: Color, core_luminance: float) -> ShaderMaterial:
 	var key := "altar_energy:%s:%.2f" % [color.to_html(), core_luminance]
