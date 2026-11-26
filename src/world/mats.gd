@@ -149,6 +149,66 @@ static func waygate_veil() -> ShaderMaterial:
 	return _cache[KEY]
 
 
+## 祭壇的程序化像素面，時間使用 instance uniform，材質可共用。
+static func altar_surface(kind: String) -> ShaderMaterial:
+	assert(kind in ["flame", "water", "frost", "arcane_orb", "life"])
+	var key := "altar_surface:" + kind
+	if not _cache.has(key):
+		var mat := ShaderMaterial.new()
+		mat.shader = load("res://shaders/altar_%s.gdshader" % kind)
+		if kind == "arcane_orb":
+			mat.set_shader_parameter("violet_color", Elements.color(Elements.Type.ARCANE))
+			mat.set_shader_parameter("ruby_color", Elements.gradient_color(Elements.Type.ARCANE, 1.0))
+		_cache[key] = mat
+	return _cache[key]
+
+
+## 能量的外緣保留元素色，核心輸出 HDR；不依賴 unshaded 會忽略的 EMISSION。
+static func altar_energy(color: Color, core_luminance: float) -> ShaderMaterial:
+	var key := "altar_energy:%s:%.2f" % [color.to_html(), core_luminance]
+	if not _cache.has(key):
+		var mat := ShaderMaterial.new()
+		mat.shader = preload("res://shaders/altar_energy.gdshader")
+		mat.set_shader_parameter("energy_color", color)
+		mat.set_shader_parameter("core_luminance", core_luminance)
+		_cache[key] = mat
+	return _cache[key]
+
+
+static func altar_earth() -> ShaderMaterial:
+	const KEY := "altar_earth"
+	if not _cache.has(KEY):
+		var mat := ShaderMaterial.new()
+		mat.shader = preload("res://shaders/altar_earth.gdshader")
+		mat.set_shader_parameter("albedo_tex", tex("stone_wall"))
+		mat.set_shader_parameter("normal_tex", normal_or_flat("stone_wall"))
+		mat.set_shader_parameter("rock_tint", Color("#d1af7b"))
+		_cache[KEY] = mat
+	return _cache[KEY]
+
+
+static func altar_ice(size: Vector3) -> ShaderMaterial:
+	var key := "altar_ice:%s" % size
+	if not _cache.has(key):
+		var mat := ShaderMaterial.new()
+		mat.shader = preload("res://shaders/altar_ice.gdshader")
+		mat.set_shader_parameter("crystal_size", size)
+		_cache[key] = mat
+	return _cache[key]
+
+
+static func altar_arcane(instance_gradient: bool = true) -> ShaderMaterial:
+	var key := "altar_arcane:%s" % instance_gradient
+	if not _cache.has(key):
+		var mat := ShaderMaterial.new()
+		mat.shader = preload("res://shaders/altar_arcane.gdshader")
+		mat.set_shader_parameter("instance_gradient", instance_gradient)
+		mat.set_shader_parameter("violet_color", Elements.color(Elements.Type.ARCANE))
+		mat.set_shader_parameter("ruby_color", Elements.gradient_color(Elements.Type.ARCANE, 1.0))
+		_cache[key] = mat
+	return _cache[key]
+
+
 ## 樹葉方塊：貼圖同 tri()，外加整塊隨風晃動。季節可換用專屬葉片貼圖。
 static func foliage(tint: Color = Color.WHITE, sway: float = 0.05, tex_name: String = "leaves") -> ShaderMaterial:
 	var key := "foliage:%s:%s:%.3f" % [tex_name, tint.to_html(), sway]

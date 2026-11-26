@@ -340,7 +340,6 @@ static func element_altar_base(width: float) -> Node3D:
 static func element_altar(element: int) -> Node3D:
 	var root := Node3D.new()
 	root.name = "ElementAltar_%d" % element
-	var color := Elements.color(element)
 	var stone := Mats.tri("flagstone", Color("#918b9b"))
 	var trim := Mats.metal(Color("#be995e"))
 	Build.box(root, Vector3(1.39, 0.10, 1.22), Vector3(0, 0.27, 0), stone)
@@ -361,9 +360,10 @@ static func element_altar(element: int) -> Node3D:
 	glyph.position = Vector3(0, 0.61, 0.60)
 	root.add_child(glyph)
 	Build.box(root, Vector3(0.54, 0.09, 0.54), Vector3(0, 1.08, 0), trim, Vector3(0, 45, 0))
-	var gem := Mats.emissive(color, 0.82)
-	Build.prism(root, Vector3(0.49, 0.42, 0.39), Vector3(0, 1.53, 0), gem, Vector3(0, 28, 0))
-	Build.prism(root, Vector3(0.49, 0.39, 0.39), Vector3(0, 1.125, 0), gem, Vector3(0, 28, 180))
+	var fx := preload("res://src/world/element_altar_fx.gd").new(element)
+	fx.name = "ElementFX"
+	fx.position = Vector3(0, 1.13, 0)
+	root.add_child(fx)
 	return root
 
 

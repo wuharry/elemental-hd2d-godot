@@ -47,6 +47,7 @@ func _run() -> void:
 	_static_scene_file_checks()
 	_static_shader_checks()
 	_lighting_table_checks()
+	_multimesh_gate_checks()
 	for id in Scenes.LIST:
 		await _scene_rule_checks(id)
 	print("%d passed, %d failed" % [_passed, _failed])
@@ -207,9 +208,8 @@ func _scene_rule_checks(id: String) -> void:
 		if n is MeshInstance3D:
 			_mesh_rules(n as MeshInstance3D, errors)
 		elif n is MultiMeshInstance3D:
-			var mm := (n as MultiMeshInstance3D).multimesh.mesh
-			if not (mm is ArrayMesh and mm.get_faces().size() == 12):
-				_note(errors, "A3 MultiMesh 只能是交叉面片（兩片四邊形）", n)
+			if not _allowed_multimesh(n as MultiMeshInstance3D):
+				_note(errors, "A3 MultiMesh 只用交叉面片或祭壇方塊／三角柱特效", n)
 			_material_rules((n as MultiMeshInstance3D).material_override, errors, n)
 		elif n is GPUParticles3D:
 			var dp := (n as GPUParticles3D).draw_pass_1
@@ -243,6 +243,60 @@ func _scene_rule_checks(id: String) -> void:
 		_check(float(h["base_h"]) >= 1.6 and float(h["base_h"]) <= 1.9 and per_floor >= 1.5 and per_floor <= 1.75,
 			"A11 %s 房屋 seed %d 是 Q 版比例（底層 1.6–1.9、每層 1.5–1.75 公尺）" % [id, h["seed"]])
 	world.free()
+
+
+func _allowed_multimesh(node: MultiMeshInstance3D) -> bool:
+	if node.multimesh == null or node.multimesh.mesh == null:
+		return false
+	var mesh := node.multimesh.mesh
+	if mesh is ArrayMesh and mesh.get_faces().size() == 12:
+		return true
+	# Instancing does not change A3's allowed primitive shapes. Restrict the new path
+	# to untextured altar FX, whose animation must remain outside static batching.
+	if not (mesh is BoxMesh or mesh is PrismMesh) or not node.is_in_group("altar_fx_geometry"):
+		return false
+	var mat := node.material_override
+	var untextured: bool = mat is StandardMaterial3D and mat.albedo_texture == null \
+		and mat.normal_texture == null and mat.emission_texture == null
+	var energy: bool = mat is ShaderMaterial and mat.shader != null \
+		and mat.shader.resource_path in ["res://shaders/altar_arcane.gdshader", "res://shaders/altar_energy.gdshader"]
+	if not (untextured or energy):
+		return false
+	var parent := node.get_parent()
+	while parent != null:
+		var script: Script = parent.get_script()
+		if script != null and script.resource_path == "res://src/world/element_altar_fx.gd":
+			return true
+		parent = parent.get_parent()
+	return false
+
+
+func _multimesh_gate_checks() -> void:
+	var fixture := MultiMeshInstance3D.new()
+	fixture.multimesh = MultiMesh.new()
+	fixture.multimesh.mesh = BoxMesh.new()
+	fixture.material_override = Mats.flat(Color.WHITE)
+	_check(not _allowed_multimesh(fixture), "A3 未登記的方塊 MultiMesh 不可繞過原有場景規則")
+	fixture.add_to_group("altar_fx_geometry")
+	_check(not _allowed_multimesh(fixture), "A3 只標祭壇群組而不在動態祭壇內仍拒絕")
+	var altar_fx: Node3D = load("res://src/world/element_altar_fx.gd").new(Elements.Type.WATER)
+	altar_fx.add_child(fixture)
+	_check(_allowed_multimesh(fixture), "A3 動態祭壇內的無貼圖方塊實例符合方塊風格")
+	fixture.remove_from_group("altar_fx_geometry")
+	_check(not _allowed_multimesh(fixture), "A3 祭壇中的方塊實例仍需明確登記")
+	fixture.add_to_group("altar_fx_geometry")
+	fixture.multimesh.mesh = SphereMesh.new()
+	_check(not _allowed_multimesh(fixture), "A3 平滑球體即使標祭壇特效仍拒絕")
+	fixture.multimesh.mesh = BoxMesh.new()
+	fixture.material_override = Mats.tri("stone_wall")
+	_check(not _allowed_multimesh(fixture), "A1 祭壇實例不可縮放局部像素貼圖")
+	fixture.material_override = Mats.altar_arcane()
+	_check(_allowed_multimesh(fixture), "A3 奧術無貼圖漸層 shader 允許用於祭壇方塊")
+	fixture.material_override = Mats.altar_energy(Color.PURPLE, 2.0)
+	_check(_allowed_multimesh(fixture), "A3 無貼圖發光 shader 允許用於祭壇方塊")
+	fixture.material_override = Mats.altar_surface("water")
+	_check(not _allowed_multimesh(fixture), "A3 不因奧術例外而放行其他 shader 實例")
+	altar_fx.free()
 
 
 func _mesh_rules(mi: MeshInstance3D, errors: Dictionary) -> void:

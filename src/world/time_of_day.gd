@@ -17,6 +17,16 @@ const REFLECTION_CAPTURE_DISTANCE := 40.0
 ## sun_yaw／sun_pitch：太陽（夜晚是月亮）的方向，單位度。yaw 135 = 從右後方照向鏡頭。
 ## win0／win1／win2：三種窗戶的發光強度。lamps：路燈與門燈的強度倍率。
 const PRESETS := {
+	# 祭壇的局部魔法光只照亮近處石座；不投影、不注入體積霧。
+	"altar_fx": {
+		Elements.Type.FIRE: {"color": Color("#ff8a30"), "energy": 0.95, "range": 2.1},
+		Elements.Type.WATER: {"color": Color("#40ccf5"), "energy": 0.65, "range": 1.9},
+		Elements.Type.LIGHTNING: {"color": Color("#a970ff"), "energy": 0.78, "range": 1.9},
+		Elements.Type.ICE: {"color": Color("#7ce4ff"), "energy": 0.58, "range": 1.8},
+		Elements.Type.EARTH: {"color": Color("#f5c25b"), "energy": 0.65, "range": 1.8},
+		Elements.Type.ARCANE: {"color": Color("#dc4ea0"), "energy": 0.72, "range": 1.9},
+		Elements.Type.LIFE: {"color": Color("#7ef29e"), "energy": 0.65, "range": 1.9},
+	},
 	"morning": {
 		"sun_yaw": 128.0, "sun_pitch": -20.0, "sun_color": Color("#ffc890"), "sun_energy": 2.3,
 		"ambient_color": Color("#93a6c9"), "ambient_energy": 0.55,

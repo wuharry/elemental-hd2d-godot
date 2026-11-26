@@ -82,6 +82,8 @@ godot --headless --path . --script res://tests/hud_input_test.gd  # 操作路徑
 godot --headless --path . --script res://tests/player_animation_test.gd # 四方向、瞄準、動畫
 godot --headless --path . --script res://tests/character_layers_test.gd # 逐格接縫與角色／武器拆層
 godot --headless --path . --script res://tests/element_orbit_test.gd # 佇列狀態與角色周身光點
+godot --path . --script res://tests/element_altar_fx_test.gd     # 祭壇動畫、連續電弧／水流、合批及局部燈（需真實渲染）
+godot --path . --script res://tests/element_glow_test.gd         # 關閉場景光後逐元素比較 glow 開／關，含正負控制
 godot --headless --path . --script res://tests/style_test.gd      # 四場景組裝與切換 + 逐場景硬規則（第 2、8 節；不是視覺驗收）
 godot --headless --path . --script res://tests/mesh_batch_test.gd # 合併前後幾何與材質資料
 godot --headless --path . --script res://tests/water_reflection_test.gd # 水底、反射覆蓋及日夜／場景切換
