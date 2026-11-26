@@ -117,14 +117,34 @@ const GLYPHS := {
 		".......sws",
 		"........s",
 	],
+	Elements.Type.LIFE: [
+		".............hhh",
+		"...........hhwwhs",
+		"..........hhwwhbs",
+		".hh......hhwhhbbs",
+		".hwwhh...hwhhbbss",
+		".hhwwhh..hhbbbss",
+		"..hhwwhhs.hbbss",
+		"..shhwwhs.hbss",
+		"...sbbwhh.hbs",
+		"....ssbwhhbs",
+		"......sbhhbs",
+		".......shbs",
+		".......shbs",
+		"......shhbs",
+		".....shhhbbs",
+		"....shbbbbbbs",
+		".....sssssss",
+	],
 }
 const PALETTES := {
 	Elements.Type.WATER: {"s": Color("#285a99"), "b": Elements.INFO[Elements.Type.WATER]["color"], "h": Color("#65d3ef"), "w": Color("#ddffff")},
 	Elements.Type.FIRE: {"s": Color("#ba393c"), "b": Elements.INFO[Elements.Type.FIRE]["color"], "h": Color("#ff9f39"), "w": Color("#ffdf85")},
-	Elements.Type.LIGHTNING: {"s": Color("#c28035"), "b": Color("#f8b638"), "h": Elements.INFO[Elements.Type.LIGHTNING]["color"], "w": Color("#fff5ac")},
+	Elements.Type.LIGHTNING: {"s": Color("#4c287d"), "b": Elements.INFO[Elements.Type.LIGHTNING]["color"], "h": Color("#bd9bff"), "w": Color("#e4d1ff")},
 	Elements.Type.ICE: {"b": Color("#62aaca"), "h": Elements.INFO[Elements.Type.ICE]["color"], "w": Color("#f0ffff")},
 	Elements.Type.EARTH: {"s": Color("#70503e"), "b": Elements.INFO[Elements.Type.EARTH]["color"], "h": Color("#e5b474"), "w": Color("#ffe2a8")},
 	Elements.Type.ARCANE: {"s": Color("#634294"), "b": Elements.INFO[Elements.Type.ARCANE]["color"], "h": Color("#dfa9ff"), "w": Color("#fff0ff")},
+	Elements.Type.LIFE: {"s": Color("#24754f"), "b": Elements.INFO[Elements.Type.LIFE]["color"], "h": Color("#a4f3a3"), "w": Color("#e4ffc6")},
 }
 
 
@@ -144,7 +164,11 @@ func _init() -> void:
 					var edge := point + offset
 					if tile.get_pixelv(edge).a == 0.0:
 						tile.set_pixelv(edge, INK)
-				tile.set_pixelv(point, PALETTES[element][row[x]])
+				var pixel: Color = PALETTES[element][row[x]]
+				if element == Elements.Type.ARCANE:
+					var blend := snappedf(float(y) / (rows.size() - 1), 0.25)
+					pixel = _arcane_shade(row[x], blend)
+				tile.set_pixelv(point, pixel)
 		atlas.blit_rect(tile, Rect2i(0, 0, TILE, TILE), Vector2i(column * TILE, 0))
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT.get_base_dir()))
 	var err := atlas.save_png(OUT)
@@ -153,6 +177,15 @@ func _init() -> void:
 	else:
 		err = _save_mote()
 	quit(0 if err == OK else 1)
+
+
+func _arcane_shade(shade: String, blend: float) -> Color:
+	var tint := Elements.gradient_color(Elements.Type.ARCANE, blend)
+	match shade:
+		"s": return tint.darkened(0.48)
+		"h": return tint.lightened(0.22)
+		"w": return tint.lightened(0.55)
+	return tint
 
 
 ## 中性色交給 Sprite3D 套用元素色。亮芯和暗邊在夜景、雪地都能分辨。
@@ -168,4 +201,14 @@ func _save_mote() -> Error:
 	var err := mote.save_png("res://assets/characters/orb.png")
 	if err != OK:
 		printerr("無法寫入元素光點：", error_string(err))
+		return err
+	var arcane := Image.create_empty(5, 5, false, Image.FORMAT_RGBA8)
+	for y in rows.size():
+		for x in rows[y].length():
+			var shade: String = rows[y][x]
+			if shade != ".":
+				arcane.set_pixel(x, y, _arcane_shade(shade, float(y) / (rows.size() - 1)))
+	err = arcane.save_png("res://assets/characters/orb_arcane.png")
+	if err != OK:
+		printerr("無法寫入奧術漸層光點：", error_string(err))
 	return err

@@ -7,8 +7,10 @@ const RIVER_HALF := 2.3
 const CAMP := Vector2(8.0, 5.5)
 const SHRINE := Vector2(9.5, -10.6)
 const ALTAR_ORDER := [Elements.Type.WATER, Elements.Type.ICE, Elements.Type.EARTH,
-	Elements.Type.ARCANE, Elements.Type.FIRE, Elements.Type.LIGHTNING]
+	Elements.Type.ARCANE, Elements.Type.FIRE, Elements.Type.LIGHTNING, Elements.Type.LIFE]
 const ALTAR_SPACING := 1.60
+# 固定原有六座的左端，新增祭壇只向右延伸，既有抵達點與通道不平移。
+const ALTAR_ROW_START := SHRINE - Vector2(4.0, 0)
 const ALTAR_STAND_OFFSET := Vector2(0, 1.95)
 
 
@@ -18,8 +20,7 @@ func _init() -> void:
 	player_start = Vector3(4.0, 0.0, 1.2)
 	interactions = {"to_village": Vector2(2.1, -9.8)}
 	for i in ALTAR_ORDER.size():
-		var offset := (i - (ALTAR_ORDER.size() - 1) * 0.5) * ALTAR_SPACING
-		element_altars[ALTAR_ORDER[i]] = SHRINE + Vector2(offset, 0) + ALTAR_STAND_OFFSET
+		element_altars[ALTAR_ORDER[i]] = ALTAR_ROW_START + Vector2(i * ALTAR_SPACING, 0) + ALTAR_STAND_OFFSET
 	play_half = Vector2(30.0, 19.0)
 	var aisle_left: Vector2 = element_altars[ALTAR_ORDER.front()]
 	var aisle_right: Vector2 = element_altars[ALTAR_ORDER.back()]
@@ -102,7 +103,8 @@ func populate(w: GameWorld) -> void:
 	w.place(SetPieces.fallen_log(2.6), Vector2(-9.5, 5.0), -40.0)
 	w.place(SetPieces.fallen_log(3.6), Vector2(16.5, 4.0), 75.0)
 	w.place(SetPieces.ruin_arch(), SHRINE + Vector2(0, -1.85), -8.0)
-	w.place(SetPieces.element_altar_base(ALTAR_ORDER.size() * ALTAR_SPACING), SHRINE)
+	var row_center := ALTAR_ROW_START + Vector2((ALTAR_ORDER.size() - 1) * ALTAR_SPACING * 0.5, 0)
+	w.place(SetPieces.element_altar_base(ALTAR_ORDER.size() * ALTAR_SPACING), row_center)
 	for element: int in element_altars:
 		w.place(SetPieces.element_altar(element), element_altars[element] - ALTAR_STAND_OFFSET)
 	var gate: Vector2 = interactions["to_village"]

@@ -267,7 +267,7 @@ func _run() -> void:
 		return
 	var altars: Dictionary = main.world.def.element_altars
 	_check(altars.size() == Elements.SELECTABLE.size() and altars.has_all(Elements.SELECTABLE),
-		"六種基礎元素各有一座專屬祭壇")
+		"七種基礎元素各有一座專屬祭壇")
 
 	var third: Vector2 = _widget(hud, "element", 2)["c"]
 	var fourth: Vector2 = _widget(hud, "element", 3)["c"]
@@ -308,6 +308,7 @@ func _run() -> void:
 		var reached := await _walk_road(player, move, [altars[element]])
 		_check(reached and hud.get("_altar_element") == element, "可沿祭壇前步行到%s祭壇" % Elements.display_name(element))
 
+	await _walk_road(player, move, [altars[Elements.Type.ARCANE]])
 	await _tap_key(KEY_4)
 	_check(player.loadout == [Elements.Type.WATER, Elements.Type.FIRE, Elements.Type.EARTH, Elements.Type.ARCANE],
 		"靠近奧術祭壇時鍵盤 4 直接替換第四格")

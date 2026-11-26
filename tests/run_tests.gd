@@ -86,9 +86,9 @@ func _test_compound_cannot_fuse_again() -> void:
 
 
 func _test_unknown_recipe_keeps_queue() -> void:
-	var q := _queue([Elements.Type.ICE, Elements.Type.LIGHTNING])
+	var q := _queue([Elements.Type.EARTH, Elements.Type.LIGHTNING])
 	_check(not q.fuse_last_two(), "沒有配方的組合不能融合")
-	_check(q.slots == [Elements.Type.ICE, Elements.Type.LIGHTNING], "佇列保持原樣")
+	_check(q.slots == [Elements.Type.EARTH, Elements.Type.LIGHTNING], "佇列保持原樣")
 
 
 func _test_take_all_clears() -> void:

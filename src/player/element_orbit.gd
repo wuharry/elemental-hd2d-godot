@@ -1,7 +1,8 @@
 extends Node3D
-## 光點順序與施法佇列相同。四格共用一張像素圖，空佇列會停止更新。
+## 光點順序與施法佇列相同；奧術保留紫紅漸層，空佇列會停止更新。
 
 const MOTE := preload("res://assets/characters/orb.png")
+const ARCANE_MOTE := preload("res://assets/characters/orb_arcane.png")
 const RADIUS := 0.94
 const HEIGHT := 0.72
 const SPEED := TAU / 3.6
@@ -34,7 +35,9 @@ func _sync(slots: Array[int]) -> void:
 		var dot := _motes[i]
 		dot.visible = i < _count
 		if dot.visible:
-			dot.modulate = Elements.color(slots[i])
+			var arcane := slots[i] == Elements.Type.ARCANE
+			dot.texture = ARCANE_MOTE if arcane else MOTE
+			dot.modulate = Color.WHITE if arcane else Elements.color(slots[i])
 	set_process(_count > 0)
 	_place_motes()
 

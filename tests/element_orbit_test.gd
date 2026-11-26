@@ -30,7 +30,10 @@ func _matches(orbit: Node3D, elements: Array) -> bool:
 	if dots.size() != elements.size():
 		return false
 	for i in dots.size():
-		if not dots[i].modulate.is_equal_approx(Elements.color(elements[i])):
+		var arcane: bool = elements[i] == Elements.Type.ARCANE
+		var expected := Color.WHITE if arcane else Elements.color(elements[i])
+		var texture_path := "res://assets/characters/orb_arcane.png" if arcane else "res://assets/characters/orb.png"
+		if not dots[i].modulate.is_equal_approx(expected) or dots[i].texture.resource_path != texture_path:
 			return false
 	return true
 
@@ -83,6 +86,15 @@ func _run() -> void:
 	_check(orbit.is_processing(), "再次填入佇列即恢復環繞")
 	player.queue.clear()
 	_check(_matches(orbit, []) and not orbit.is_processing(), "手動清空也移除光點")
+	player.queue.add(Elements.Type.ARCANE)
+	_check(_matches(orbit, [Elements.Type.ARCANE]), "奧術使用紫紅漸層圖且不重複染色")
+	var arcane_image := Image.load_from_file("res://assets/characters/orb_arcane.png")
+	var top := arcane_image.get_pixel(2, 0)
+	var bottom := arcane_image.get_pixel(2, 4)
+	_check(top.b > top.r and bottom.r > bottom.b, "奧術光點上紫下紅，兩端可辨識")
+	player.queue.clear()
+	player.queue.add(Elements.Type.LIGHTNING)
+	_check(_matches(orbit, [Elements.Type.LIGHTNING]), "奧術換成雷時重設一般圖與紫色調變")
 	player.free()
 	print("%d passed, %d failed" % [_passed, _failed])
 	quit(1 if _failed > 0 else 0)
