@@ -2,4 +2,5 @@
 *.translation
 export_presets.cfg
 /test_output/
+/docs/screenshots/
 .DS_Store

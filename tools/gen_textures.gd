@@ -10,6 +10,7 @@ const S := 64
 func _init() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT))
 	_grass_ground()
+	_grass_ground_seasonal()
 	_dirt()
 	_cobble()
 	_stone_wall()
@@ -17,6 +18,7 @@ func _init() -> void:
 	_planks()
 	_roof()
 	_leaves()
+	_leaves_seasonal()
 	_bark()
 	_window()
 	_door()
@@ -291,6 +293,54 @@ func _leaves() -> void:
 	_save_normal(hgt, S, S, 1.6, "leaves_n")
 
 
+func _leaves_seasonal() -> void:
+	_leaves_variant("leaves_blossom", _hex(["#b85c7b", "#d87d9c", "#ee9fb9", "#ffc6d8", "#ffebf2"]), 85)
+	_leaves_variant("leaves_autumn", _hex(["#762418", "#a43820", "#cc5b24", "#e48a2c", "#f4c248"]), 86)
+	_leaves_variant("leaves_winter", _hex(["#3e5462", "#526c7a", "#6e8a98", "#98b2c0", "#d4e4f0"]), 87)
+
+
+func _leaves_variant(name: String, pal: Array, salt: int) -> void:
+	var img := _new()
+	for y in S:
+		for x in S:
+			var by: int = y / 2
+			var bx: int = (x + (1 if by % 2 == 1 else 0)) / 2
+			var t: float = _hash(bx, by, salt) * 0.55 + _vnoise(x, y, 8, salt + 1) * 0.3 + _vnoise(x, y, 3, salt + 2) * 0.15
+			img.set_pixel(x, y, _pal(pal, clampf(t * 1.15 - 0.05, 0.0, 0.999)))
+	_save(img, name)
+
+
+func _grass_ground_seasonal() -> void:
+	# 春草地：明亮嫩綠草坪＋零星掉落的粉白花瓣
+	var spring := _new()
+	var spring_pal := _hex(["#428634", "#549e3e", "#68b44a", "#7fc95a", "#96dc6c"])
+	var hgt := PackedFloat32Array()
+	hgt.resize(S * S)
+	for y in S:
+		for x in S:
+			var t: float = _vnoise(x, y, 6, 31) * 0.5 + _vnoise(x, y, 16, 32) * 0.3 + _hash(x, y, 33) * 0.2
+			var c: Color = _pal(spring_pal, t)
+			if _hash(x, y, 34) > 0.975:
+				c = Color.html("#ffd8e6") if _hash(x, y, 35) > 0.35 else Color.html("#fff4f8")
+			spring.set_pixel(x, y, c)
+			hgt[y * S + x] = t
+	_save(spring, "grass_ground_spring")
+	_save_normal(hgt, S, S, 1.4, "grass_ground_spring_n")
+	# 秋草地：暖橄欖與枯金草坪＋零星楓紅落葉點
+	var autumn := _new()
+	var autumn_pal := _hex(["#665c2e", "#7a6934", "#8e7538", "#a48440", "#b6954a"])
+	for y in S:
+		for x in S:
+			var t: float = _vnoise(x, y, 6, 41) * 0.5 + _vnoise(x, y, 16, 42) * 0.3 + _hash(x, y, 43) * 0.2
+			var c: Color = _pal(autumn_pal, t)
+			if _hash(x, y, 44) > 0.972:
+				c = Color.html("#d4542c") if _hash(x, y, 45) > 0.45 else Color.html("#eba63c")
+			autumn.set_pixel(x, y, c)
+			hgt[y * S + x] = t
+	_save(autumn, "grass_ground_autumn")
+	_save_normal(hgt, S, S, 1.4, "grass_ground_autumn_n")
+
+
 func _bark() -> void:
 	var img := _new()
 	var pal := _hex(["#3f2c20", "#4d3626", "#5b412d", "#6a4c35"])
@@ -308,6 +358,8 @@ func _bark() -> void:
 ## 兩種草叢，各 16x16，並排成 32x16。
 func _grass_tuft() -> void:
 	_grass_tuft_named("grass_tuft", _hex(["#3a7a2c", "#4f9636", "#6cb444", "#93d05a"]))
+	# 秋季用的金黃枯草（BLUEPRINT S12：獨立圖集，不硬染綠草）
+	_grass_tuft_named("grass_tuft_autumn", _hex(["#765024", "#9e6e2e", "#c8943c", "#e6c05e"]))
 	# 雪地用的霜枯草：同樣的草形，換成枯黃到霜白
 	_grass_tuft_named("grass_tuft_frost", _hex(["#857756", "#a49672", "#cdc4a6", "#eef3f8"]))
 
@@ -334,11 +386,19 @@ func _grass_tuft_named(name: String, tones: Array) -> void:
 
 ## 四種花，各 16x16，並排成 64x16。
 func _flowers() -> void:
+	_flowers_named("flowers", Color.html("#3f8a30"), Color.html("#5aa63c"),
+		_hex(["#fbfbf2", "#ffd84a", "#ff7a3c", "#b98cff"]),
+		_hex(["#f2c230", "#e98a1e", "#ffe27a", "#f6e6ff"]))
+	_flowers_named("flowers_spring", Color.html("#469a38"), Color.html("#68bc48"),
+		_hex(["#ffb8d0", "#fff4f8", "#ffe25c", "#a4d8ff"]),
+		_hex(["#ffea90", "#ffb0c8", "#f0a028", "#eef8ff"]))
+	_flowers_named("flowers_autumn", Color.html("#7c6230"), Color.html("#9c7c3a"),
+		_hex(["#f2b838", "#e87830", "#d44c3c", "#f6e6c8"]),
+		_hex(["#fff0a8", "#ffd468", "#f6b04c", "#d89038"]))
+
+
+func _flowers_named(name: String, stem: Color, leaf: Color, petals: Array, cores: Array) -> void:
 	var img := _new(64, 16)
-	var stem := Color.html("#3f8a30")
-	var leaf := Color.html("#5aa63c")
-	var petals := _hex(["#fbfbf2", "#ffd84a", "#ff7a3c", "#b98cff"])
-	var cores := _hex(["#f2c230", "#e98a1e", "#ffe27a", "#f6e6ff"])
 	for v in 4:
 		for f in 3:
 			var fx: int = 3 + f * 5 + int(_hash(f, v, 111) * 2.0)
@@ -354,7 +414,7 @@ func _flowers() -> void:
 				if qx >= 0 and qx <= 15 and qy >= 0 and qy <= 15:
 					img.set_pixel(v * 16 + qx, qy, petals[v])
 			img.set_pixel(v * 16 + fx, ty, cores[v])
-	_save(img, "flowers")
+	_save(img, name)
 
 
 ## 落葉、蝴蝶翅膀、光點：都是白底，顏色由粒子或材質決定。

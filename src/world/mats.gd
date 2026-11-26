@@ -149,19 +149,20 @@ static func waygate_veil() -> ShaderMaterial:
 	return _cache[KEY]
 
 
-## 樹葉方塊：貼圖同 tri()，外加整塊隨風晃動。
-static func foliage(tint: Color = Color.WHITE, sway: float = 0.05) -> ShaderMaterial:
-	var key := "foliage:%s:%.3f" % [tint.to_html(), sway]
+## 樹葉方塊：貼圖同 tri()，外加整塊隨風晃動。季節可換用專屬葉片貼圖。
+static func foliage(tint: Color = Color.WHITE, sway: float = 0.05, tex_name: String = "leaves") -> ShaderMaterial:
+	var key := "foliage:%s:%s:%.3f" % [tex_name, tint.to_html(), sway]
 	if _cache.has(key):
 		return _cache[key]
 	var m := ShaderMaterial.new()
 	m.shader = load("res://shaders/foliage_block.gdshader")
-	m.set_shader_parameter("albedo_tex", tex("leaves"))
+	m.set_shader_parameter("albedo_tex", tex(tex_name))
 	m.set_shader_parameter("normal_tex", tex("leaves_n"))
 	m.set_shader_parameter("tint", tint)
 	m.set_shader_parameter("texel_scale", TEXEL_SCALE)
 	m.set_shader_parameter("sway", sway)
 	m.set_meta("batch_kind", "foliage")
+	m.set_meta("foliage_tex", tex_name)
 	_cache[key] = m
 	return m
 
@@ -189,12 +190,12 @@ static func batched_tri(source: StandardMaterial3D) -> ShaderMaterial:
 	return m
 
 
-## 方塊中心、搖擺幅度與色調已在頂點裡，因此不同樹可以共用同一材質。
-static func batched_foliage() -> ShaderMaterial:
-	const KEY := "batch_foliage"
-	if _cache.has(KEY):
-		return _cache[KEY]
-	var m: ShaderMaterial = foliage().duplicate()
+## 方塊中心、搖擺幅度與色調已在頂點裡，因此共用同一葉片貼圖的樹能合批。
+static func batched_foliage(tex_name: String = "leaves") -> ShaderMaterial:
+	var key := "batch_foliage:" + tex_name
+	if _cache.has(key):
+		return _cache[key]
+	var m: ShaderMaterial = foliage(Color.WHITE, 0.05, tex_name).duplicate()
 	m.set_shader_parameter("batched", true)
-	_cache[KEY] = m
+	_cache[key] = m
 	return m

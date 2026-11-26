@@ -6,9 +6,12 @@ extends RefCounted
 const LIST := ["village", "forest", "snow", "dungeon"]
 
 
-static func make(id: String) -> SceneDef:
+static func make(id: String, season: String = "summer") -> SceneDef:
 	var script: Script = load("res://src/world/scenes/%s_scene.gd" % id)
-	return script.new()
+	var def: SceneDef = script.new()
+	if def.supports_seasons and SceneDef.SEASONS.has(season):
+		def.apply_season(season)
+	return def
 
 
 static func next_id(id: String) -> String:

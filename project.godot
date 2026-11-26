@@ -42,6 +42,14 @@ foliage_reveal={
 "type": "float",
 "value": 0.0
 }
+rain_wetness={
+"type": "float",
+"value": 0.0
+}
+rain_intensity={
+"type": "float",
+"value": 0.0
+}
 
 [rendering]
 

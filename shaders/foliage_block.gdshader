@@ -9,6 +9,8 @@ uniform vec3 tint : source_color = vec3(1.0);
 uniform float texel_scale = 0.5;
 uniform float sway = 0.05;
 uniform bool batched = false;
+global uniform float rain_wetness;
+global uniform float rain_intensity;
 
 varying vec3 lpos;
 varying vec3 lnrm;
@@ -28,7 +30,7 @@ void vertex() {
 		o = (MODEL_MATRIX * vec4(CUSTOM0.xyz, 1.0)).xyz;
 		block_sway = CUSTOM0.w;
 	}
-	float gust = 0.6 + 0.4 * sin(TIME * 0.6 + o.x * 0.12 + o.z * 0.09);
+	float gust = (0.6 + 0.4 * sin(TIME * 0.6 + o.x * 0.12 + o.z * 0.09)) * (1.0 + rain_intensity * 0.65);
 	vec3 off = vec3(
 		sin(TIME * 1.6 + o.x * 1.3 + o.y * 0.9),
 		sin(TIME * 2.1 + o.z * 1.1) * 0.35,
@@ -51,9 +53,9 @@ void fragment() {
 		uv = vec2(lpos.x, -lpos.y);
 	}
 	uv *= texel_scale;
-	ALBEDO = texture(albedo_tex, uv).rgb * block_tint;
+	ALBEDO = texture(albedo_tex, uv).rgb * block_tint * mix(1.0, 0.84, rain_wetness);
 	NORMAL_MAP = texture(normal_tex, uv).rgb;
 	NORMAL_MAP_DEPTH = 0.8;
-	ROUGHNESS = 0.9;
+	ROUGHNESS = mix(0.9, 0.42, rain_wetness);
 	BACKLIGHT = ALBEDO * 0.25;
 }

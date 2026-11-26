@@ -3,8 +3,8 @@
 手機橫向、斜俯視的元素組招動作冒險。Godot 4.7、GDScript、Forward+。
 
 ```bash
-godot --path .          # 開始玩（WASD 移動、1–4 加元素、F 融合、空白鍵施放、F1–F4 切時段）
-godot --path . -- --scene=forest  # village／forest／snow／dungeon
+godot --path .          # 開始玩（WASD 移動、1–4 加元素、F 融合、空白鍵施放、F1–F4 切時段、G/F9–F12 切四季、R 切換晴雨）
+godot --path . -- --scene=village --season=autumn --weather=rain  # 指定場景、季節與天氣
 ```
 
 F5–F8 分別切換村莊、森林河谷、雪原吊橋、地下城大廳。這些是畫面與操作原型，尚未加入敵人或正式傷害系統。

@@ -5,6 +5,8 @@ extends CanvasLayer
 
 signal interaction_requested
 signal element_replacement_requested(slot: int, element: int)
+signal season_requested(season_name: String)
+signal weather_toggled
 
 ## DRAFT：內圈佔搖桿半徑的比例，需要實機測試後才定（規則文件第 5 節）。
 const AIM_INNER_RATIO := 0.55
@@ -29,6 +31,16 @@ var _toast_time := 0.0
 var _interaction := ""
 var _altar_element := -1
 var _interact_widget: Dictionary = {}
+var _supports_seasons := true
+var _season := "summer"
+var _outdoor := true
+
+const SEASON_COLORS := {
+	"spring": Color("#f2a6c4"),
+	"summer": Color("#7ac46a"),
+	"autumn": Color("#e89a44"),
+	"winter": Color("#9ec8f0"),
+}
 
 
 func setup(player: Player, rig: CameraRig, tod: TimeOfDay) -> void:
@@ -45,6 +57,7 @@ func setup(player: Player, rig: CameraRig, tod: TimeOfDay) -> void:
 	_player.queue.changed.connect(_canvas.queue_redraw.unbind(1))
 	_player.loadout_changed.connect(_canvas.queue_redraw)
 	_tod.changed.connect(_canvas.queue_redraw.unbind(1))
+	_tod.weather_changed.connect(_canvas.queue_redraw.unbind(1))
 	get_viewport().size_changed.connect(_layout)
 	set_process(false)
 	_layout()
@@ -71,11 +84,28 @@ func _layout() -> void:
 	# 驗收用：切換時段（正式版會拿掉）
 	for i in TimeOfDay.ORDER.size():
 		_widgets.append({"kind": "time", "c": Vector2(size.x - 60.0 - (3 - i) * 74.0, 58.0), "r": 30.0, "time": TimeOfDay.ORDER[i]})
+	# 驗收用：季節與下雨切換（排在時段鍵下方，遠離快捷槽）
+	if _outdoor:
+		_widgets.append({"kind": "weather", "c": Vector2(size.x - 60.0, 126.0), "r": 25.0})
+	if _supports_seasons:
+		for i in SceneDef.SEASONS.size():
+			_widgets.append({"kind": "season", "c": Vector2(size.x - 124.0 - (3 - i) * 62.0, 126.0), "r": 25.0, "season": SceneDef.SEASONS[i]})
 	# 搖桿的擴大命中區要排在實際按鍵之後，避免吃掉融合鍵靠內側的點按。
 	_widgets.append({"kind": "move", "c": move_c, "r": 135.0, "v": Vector2.ZERO})
 	_widgets.append({"kind": "aim", "c": aim_c, "r": 125.0, "v": Vector2.ZERO})
 	_update_interact_widget()
 	_canvas.queue_redraw()
+
+
+func set_environment_state(supports_seasons: bool, season_name: String, outdoor: bool) -> void:
+	var layout_changed := supports_seasons != _supports_seasons or outdoor != _outdoor
+	_supports_seasons = supports_seasons
+	_season = season_name
+	_outdoor = outdoor
+	if layout_changed:
+		_layout()
+	else:
+		_canvas.queue_redraw()
 
 
 ## 移動穿過互動邊界時，只撤換屬於舊地點的按鍵與觸控，讓搖桿持續跟著手指。
@@ -221,6 +251,10 @@ func _release(index: int, pos: Vector2) -> void:
 			_say("快捷法術：累積擊殺後解鎖，尚未實作")
 		"time":
 			_tod.set_time(w["time"])
+		"season":
+			season_requested.emit(w["season"])
+		"weather":
+			weather_toggled.emit()
 		"interact":
 			interaction_requested.emit()
 
@@ -259,6 +293,13 @@ func _draw_hud() -> void:
 			"time":
 				var on: bool = _tod.current == w["time"]
 				_draw_button(w, Color("#ffd27a") if on else Color("#4a4a52"), TimeOfDay.LABELS[w["time"]], 24)
+			"season":
+				var s: String = w["season"]
+				var on: bool = _season == s
+				_draw_button(w, SEASON_COLORS[s] if on else Color("#464650"), SceneDef.SEASON_LABELS[s], 22)
+			"weather":
+				var rain_on: bool = _tod.weather == "rain"
+				_draw_button(w, Color("#6eaef0") if rain_on else Color("#464650"), TimeOfDay.WEATHER_LABELS[_tod.weather], 22)
 			"interact":
 				_draw_tablet(w, _interaction, INTERACTION_LABELS[_interaction], Color("#403749"), Color("#e5c58b"))
 	if _toast_time > 0.0:

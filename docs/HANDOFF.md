@@ -2,7 +2,25 @@
 
 規則看 [BLUEPRINT.md](BLUEPRINT.md)。這份記錄實際完成與驗證狀態；靜態截圖不能代替操作手感或手機實機測試。
 
-最後更新：2026-11-24（半透明水面、池底／河床深度與局部反射）
+最後更新：2026-11-26（村莊四季切換、下雨天氣與濕地反光、進階像素角色 3D 法線與即時輪廓光）
+
+## 村莊四季、下雨濕地反光與角色 3D 即時光照（2026-11-26）
+
+依 Harvey 指示略過網頁版，實作原第一輪尚未補齊的**村莊四季切換**、**下雨天氣與濕地反光**，以及參考 *The Last Night*／像素角色真 3D 即時光照的**角色立體法線貼圖與即時輪廓光（Rim Light）**。
+
+- **村莊四季（春／夏／秋／冬）**：同一座村莊可即時切換四種季節（預設維持「夏」，保留既有基準）。依 BLUEPRINT S12 由 `tools/gen_textures.gd` 產出獨立季節貼圖（`leaves_blossom`、`leaves_autumn`、`leaves_winter`、`grass_ground_spring`/`_n`、`grass_ground_autumn`/`_n`、`grass_tuft_autumn`、`flowers_spring`、`flowers_autumn`），並讓 `Mats.foliage()` 與 `MeshBatcher` 依葉片貼圖分批合併。春季把既有樹冠換成櫻花、加入粉白花灌木與全村飄落花瓣；秋季換成金黃枯草、楓紅樹冠與密落葉；冬季套用屋頂積雪覆層、積雪樹冠與灌木、雪堆、降雪並移除花箱。四季保持原有可行走區域碰撞配置，光影覆寫集中在 `TimeOfDay.PRESETS["season_overrides"]`。
+- **下雨天氣與濕地水窪反光**：全域 shader 參數 `rain_wetness`／`rain_intensity` 由 `TimeOfDay` 控制並支援平滑過渡，室內場景（`dungeon`）自動維持乾燥。`ground.gdshader` 在 32 px/m 世界像素格上生成連片硬邊水窪與稀疏雨滴擴散波紋，壓低粗糙度讓 Forward+ SSR 即時映出暖色窗光、路燈與營火；`batched_triplanar.gdshader` 讓屋頂與上朝石木表面呈現濕潤反光；`water.gdshader` 加入像素對齊雨滴波紋；`foliage_block`/`foliage_card` 加強雨風擺動。`AmbientLife.rain()` 與 `rain_splashes()` 使用細長斜落方塊雨絲與地面水花（A3），雨天自動暫停蝴蝶／塵埃／螢火蟲，並於白天亮起路燈與窗光。所有晴雨光影集中在 `TimeOfDay.PRESETS["weather_overrides"]`。
+- **進階像素角色 3D 即時光照**：`tools/gen_character.gd` 依各部位幾何（帽冠、帽簷上下側、球面髮型與柔和臉面、錐形袍袖、圓柱杖柄、切面琥珀晶石與金叉）自動輸出 30 格立體法線圖（`mage_atlas_n.png`、`mage_hand_atlas_n.png`、`mage_staff_n.png`）與材質遮罩圖（`*_m.png`：R 粗糙度、G 金屬度、B 輪廓光權重、A 自發光），維持原本 21 色本體圖集與硬邊不變。新增 `shaders/pixel_character.gdshader` 套用於身體、握手、獨立武器三層：保留 Y 軸看板與 `1/cos(pitch)` 俯角補償而不扭曲法線，依 `flip_sign` 正確翻轉左右曲率；由場景所有即時 3D 光源（太陽／月亮／路燈／營火／傳送門／法術）即時驅動包覆漫射、金屬高光與 1–2 px 側逆光輪廓光（Rim Light）；琥珀晶石具 HDR 自發光並於持杖側投射柔和暖色近距反光，卸下或不發光武器時歸零；角色層補光由 0.3 降至 0.16 以免洗白 3D 明暗。
+- **操作與驗收入口**：HUD 右上角時段鍵下方新增 `春／夏／秋／冬` 與 `晴／雨` 按鍵；鍵盤支援 `G` 循環季節、`F9–F12` 直切四季、`R` 切換晴雨；截圖工具支援 `--season=spring|summer|autumn|winter` 與 `--weather=clear|rain`（`--capture` 模式下鎖定鍵盤與 HUD 點擊避免背景誤觸）。
+
+| 驗證項目 | 結果 |
+| --- | --- |
+| 回歸測試（10 組） | PASS。全部 861 項、0 FAIL（元素邏輯 19、HUD 45、角色動畫 93、拆層接縫 126、光點 13、場景風格 296、網格合批 15、水底反射 48、四季／晴雨／角色 3D 光照 200、截圖腳本 6）。 |
+| 實機截圖驗收 | PASS。提交前重新執行 `tools/capture.sh`，逐張檢視預設 HUD 六張、春／秋／冬白天、營火旁雨天日／夜，共 11 張修正後畫面；另保留同站位雨天日／夜兩張修前圖核對角色受光與陰影。HUD 間距、角色分層、四季與濕地反光正常。驗收圖只留本機 `test_output/`，不納入 Git。退出時仍有既有 Godot 4.7.2／Metal 反射探針 7 Texture RID 警告。 |
+| 提交前審查修正 | PASS。截圖入口統一鎖定主場景快捷鍵、WASD 與 HUD；實際輸入回歸修前失敗、修後通過。移除春季額外樹幹並隔離積雪亂數，四季碰撞位置、大小、方向與既有夏季一致；原本換季會推開角色約 0.63 m 的站位修後保持不動。角色看板在陰影 pass 使用主攝影機方向。三張材質遮罩透過 Godot 匯入器關閉 Fix Alpha Border，原法杖 296 個匯入像素遭改寫（其中 43 個可見），修後三張圖的 RGBA 均與來源一致。 |
+| 實玩手感與手機實機 | NOT RUN。Mobile renderer 降級與 Android 實機量測尚未執行。 |
+
+已知限制：屋頂／石木表面的雨天濕潤效果目前只在合批 triplanar shader 中，`--no-batching` 或未合併的同類材質不會套用；雨天不可把這個除錯模式當成完整的視覺等價基準。地面與水面使用各自的雨天 shader。
 
 ## 清澈水面與真正的水底（2026-11-24）
 
@@ -177,6 +195,8 @@ One original full body playable chibi mage sprite, facing slightly right toward 
 | 融合最後兩格（原有草案） | 融合鍵 | F |
 | 施放 | 右搖桿推外圈放開；拉回內圈放開則取消 | 空白鍵 |
 | 切換時段 | 右上角晨／日／昏／夜 | F1–F4；T 下一個 |
+| 切換村莊季節 | 右上角春／夏／秋／冬 | F9–F12；G 下一個 |
+| 切換晴雨天氣 | 右上角晴／雨 | R |
 | 切換展示場景 | 尚無觸控選單 | F5 村莊、F6 森林、F7 雪原、F8 地下城 |
 
 也可用 `godot --path . -- --scene=forest` 直接開指定場景。這些是場景與操作原型，不是已完成關卡。
@@ -239,8 +259,13 @@ godot --headless --path . --script res://tests/element_orbit_test.gd
 godot --headless --path . --script res://tests/style_test.gd
 godot --headless --path . --script res://tests/mesh_batch_test.gd
 godot --headless --path . --script res://tests/water_reflection_test.gd
+godot --headless --path . --script res://tests/season_weather_lighting_test.gd
 zsh tests/capture_test.sh
 tools/capture.sh
+tools/capture.sh --nohud --weather=rain --shots=day,dusk,night --tag=rain_v2
+tools/capture.sh --nohud --season=spring --shots=day,dusk --tag=spring_v2
+tools/capture.sh --nohud --season=autumn --shots=day,dusk --tag=autumn_v2
+tools/capture.sh --nohud --season=winter --shots=day,night --tag=winter_v2
 for s in village forest snow dungeon; do tools/capture.sh --scene=$s --nohud --tag=$s; done
 godot --headless --path . --script res://tools/contact_sheet.gd   # 4 場景 × 4 時段總表，打開 test_output/contact_sheet.png 看
 tools/capture.sh --nohud --shots=day,dusk --tag=clean
@@ -264,10 +289,10 @@ tools/capture.sh --nohud --pos=-13,3.1 --shots=day --tag=occlusion_off --no-reve
 | 場景資料與擺放 | `src/world/scenes/*_scene.gd` |
 | 新場景登錄、共用路徑規則 | `scenes.gd`、`scene_def.gd`；守則見 BLUEPRINT 第 8 節 |
 | 房屋、樹、道具、橋 | `house_builder.gd`、`tree_builder.gd`、`prop_builder.gd`、`set_pieces.gd` |
-| 所有場景的四時段光影 | `time_of_day.gd` 的 `PRESETS`（含 `scene_overrides`） |
+| 所有場景的四時段／四季／雨天光影 | `time_of_day.gd` 的 `PRESETS`（含 `scene_overrides`、`season_overrides`、`weather_overrides`） |
 | 半透明水、反射與河床 | `water.gdshader`、`water_surface.gd`、`water_reflection.gd`、`river_bed.gd`；池底在 `PropBuilder.pond()` |
-| 貼圖與角色 | `tools/gen_textures.gd`、`tools/gen_character.gd`；重跑後匯入 |
-| 角色動畫／瞄準 | `src/player/player.gd` |
+| 貼圖與角色（含 3D 法線／材質圖） | `tools/gen_textures.gd`、`tools/gen_character.gd`；重跑後匯入 |
+| 角色動畫／瞄準／3D 輪廓光 | `src/player/player.gd`、`shaders/pixel_character.gdshader` |
 | 手持武器外觀與握點 | `src/player/held_weapon.gd`、`weapon_visual.gd`、`assets/weapons/amber_staff.tres` |
 | 佇列光點與元素圖示 | `src/player/element_orbit.gd`、`tools/gen_element_icons.gd` |
 | 鏡頭／樹冠鏤空 | `camera_rig.gd`、`shaders/foliage_reveal.gdshaderinc` |

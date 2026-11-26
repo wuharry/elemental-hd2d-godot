@@ -5,7 +5,7 @@ extends RefCounted
 
 ## 每種會動的東西都要帶種類標記：tests/style_test.gd 依此檢查每個場景至少有四種（BLUEPRINT A10）。
 ## 新增一種就在這裡加一個工廠函式，回傳前呼叫 tag()。
-const KINDS := ["dust", "leaves", "fireflies", "smoke", "fire", "butterflies", "birds", "snowfall", "splash", "drips", "clouds", "wind"]
+const KINDS := ["dust", "leaves", "petals", "fireflies", "smoke", "fire", "butterflies", "birds", "snowfall", "rain", "rain_splashes", "splash", "drips", "clouds", "wind"]
 
 
 static func tag(node: Node3D, kind: String) -> Node3D:
@@ -87,13 +87,14 @@ static func dust() -> GPUParticles3D:
 	p.draw_pass_1 = _quad_mesh(0.06, mat)
 	p.position = Vector3(0, 3.6, 0)
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	p.add_to_group("dry_only")
 	return tag(p, "dust")
 
 
-## 樹下的落葉。
-static func leaves(pos: Vector3, radius: float, tint: Color) -> GPUParticles3D:
+## 樹下的落葉或花瓣。ramp_colors 留空時沿用夏季綠／金／橘落葉。
+static func leaves(pos: Vector3, radius: float, tint: Color, ramp_colors: Array = [], amount: int = 14) -> GPUParticles3D:
 	var p := GPUParticles3D.new()
-	p.amount = 14
+	p.amount = amount
 	p.lifetime = 7.0
 	p.preprocess = 7.0
 	p.visibility_aabb = AABB(Vector3(-12, -8, -12), Vector3(24, 12, 24))
@@ -115,7 +116,8 @@ static func leaves(pos: Vector3, radius: float, tint: Color) -> GPUParticles3D:
 	pm.scale_min = 0.8
 	pm.scale_max = 1.2
 	pm.color = tint
-	pm.color_initial_ramp = _ramp([Color("#b7d66a"), Color("#f2d060"), Color("#f09a48")], [0.0, 0.6, 1.0])
+	var colors: Array = ramp_colors if not ramp_colors.is_empty() else [Color("#b7d66a"), Color("#f2d060"), Color("#f09a48")]
+	pm.color_initial_ramp = _ramp(colors, [0.0, 0.6, 1.0])
 	p.process_material = pm
 	p.draw_pass_1 = _quad_mesh(0.25, _billboard("leaf", true, false))
 	p.position = pos
@@ -220,6 +222,7 @@ static func butterflies(homes: Array[Vector3]) -> Node3D:
 		b.set_script(script)
 		root.add_child(b)
 		b.call("setup", homes[i], tints[i % tints.size()], i)
+	root.add_to_group("dry_only")
 	return tag(root, "butterflies")
 
 
@@ -262,6 +265,113 @@ static func snowfall() -> GPUParticles3D:
 	p.position = Vector3(0, 11.0, 0)
 	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	return tag(p, "snowfall")
+
+
+## 春季隨風飄過全村的粉白櫻花花瓣。
+static func petals() -> GPUParticles3D:
+	var p := GPUParticles3D.new()
+	p.amount = 180
+	p.lifetime = 8.5
+	p.preprocess = 8.5
+	p.visibility_aabb = AABB(Vector3(-42, -12, -32), Vector3(84, 18, 64))
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = Vector3(28.0, 2.0, 20.0)
+	pm.direction = Vector3(0.85, -0.35, 0.25)
+	pm.spread = 32.0
+	pm.initial_velocity_min = 0.5
+	pm.initial_velocity_max = 1.25
+	pm.gravity = Vector3(0.28, -0.32, 0.08)
+	pm.angle_min = 0.0
+	pm.angle_max = 360.0
+	pm.angular_velocity_min = -140.0
+	pm.angular_velocity_max = 140.0
+	pm.turbulence_enabled = true
+	pm.turbulence_noise_strength = 0.85
+	pm.turbulence_noise_scale = 2.2
+	pm.scale_min = 0.75
+	pm.scale_max = 1.15
+	pm.color_initial_ramp = _ramp([Color("#ffd2e4"), Color("#fff0f6"), Color("#f29cb8")], [0.0, 0.55, 1.0])
+	p.process_material = pm
+	p.draw_pass_1 = _quad_mesh(0.2, _billboard("leaf", true, false))
+	p.position = Vector3(0, 6.2, 0)
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return tag(p, "petals")
+
+
+## 下雨：細長斜落的半透明方塊雨絲（A3），吃場景光並在路燈／營火旁映出暖光。
+## 加入 "rain_only" 群組，由 TimeOfDay 隨天氣開關。
+static func rain() -> GPUParticles3D:
+	var p := GPUParticles3D.new()
+	p.amount = 2200
+	p.lifetime = 0.8
+	p.preprocess = 1.0
+	p.visibility_aabb = AABB(Vector3(-42, -16, -32), Vector3(84, 20, 64))
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = Vector3(32.0, 0.6, 22.0)
+	pm.direction = Vector3(0.0, -1.0, 0.0)
+	pm.spread = 1.5
+	pm.initial_velocity_min = 15.5
+	pm.initial_velocity_max = 19.0
+	pm.gravity = Vector3(0.0, -3.0, 0.0)
+	pm.scale_min = 0.75
+	pm.scale_max = 1.2
+	p.process_material = pm
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.014, 0.78, 0.014)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.76, 0.86, 0.96, 0.28)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.roughness = 0.2
+	mat.emission_enabled = true
+	mat.emission = Color(0.58, 0.72, 0.88)
+	mat.emission_energy_multiplier = 0.18
+	mesh.material = mat
+	p.draw_pass_1 = mesh
+	p.position = Vector3(-1.5, 11.8, 0)
+	p.rotation_degrees.z = -9.0
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	p.emitting = false
+	p.add_to_group("rain_only")
+	return tag(p, "rain")
+
+
+## 雨滴落地濺起的微粒水花（方塊，A3）。
+static func rain_splashes() -> GPUParticles3D:
+	var p := GPUParticles3D.new()
+	p.amount = 240
+	p.lifetime = 0.28
+	p.preprocess = 0.5
+	p.visibility_aabb = AABB(Vector3(-34, -1, -24), Vector3(68, 4, 48))
+	var pm := ParticleProcessMaterial.new()
+	pm.emission_shape = ParticleProcessMaterial.EMISSION_SHAPE_BOX
+	pm.emission_box_extents = Vector3(26.0, 0.02, 18.0)
+	pm.direction = Vector3(0.0, 1.0, 0.0)
+	pm.spread = 36.0
+	pm.initial_velocity_min = 0.45
+	pm.initial_velocity_max = 0.9
+	pm.gravity = Vector3(0.0, -5.0, 0.0)
+	pm.scale_min = 0.6
+	pm.scale_max = 1.05
+	pm.scale_curve = _curve([Vector2(0.0, 0.6), Vector2(0.35, 1.0), Vector2(1.0, 0.0)])
+	p.process_material = pm
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.06, 0.024, 0.06)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.82, 0.9, 0.98, 0.26)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.roughness = 0.3
+	mat.emission_enabled = true
+	mat.emission = Color(0.68, 0.78, 0.9)
+	mat.emission_energy_multiplier = 0.08
+	mesh.material = mat
+	p.draw_pass_1 = mesh
+	p.position = Vector3(0, 0.04, 0)
+	p.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	p.emitting = false
+	p.add_to_group("rain_only")
+	return tag(p, "rain_splashes")
 
 
 ## 瀑布底下濺起的水花：白色小方塊往外噴再落下。

@@ -11,6 +11,7 @@ const CharacterAnimation := preload("res://src/player/character_animation.gd")
 const WeaponAppearance := preload("res://src/player/weapon_visual.gd")
 const HeldWeapon := preload("res://src/player/held_weapon.gd")
 const DEFAULT_WEAPON := preload("res://assets/weapons/amber_staff.tres")
+const CHAR_SHADER := preload("res://shaders/pixel_character.gdshader")
 # B 版在世界中的顯示倍率。圖集與杖光共用同一個像素到公尺的換算。
 const VISUAL_SCALE := 1.2
 const PIXEL := VISUAL_SCALE / 32.0
@@ -36,6 +37,8 @@ var loadout := Elements.LOADOUT.duplicate()
 var move_input := Vector2.ZERO
 ## 右搖桿的螢幕方向；非零時瞄準優先於移動面向。
 var aim_input := Vector2.ZERO
+## 截圖驗收時可關閉鍵盤輸入，避免背景按鍵影響畫面方向。
+var accept_keyboard := true
 ## 鏡頭水平朝向（弧度），由 main 每幀更新。
 var camera_yaw := 0.0
 ## 目前面向／瞄準的世界方向（水平）。
@@ -53,6 +56,8 @@ var sprite: Sprite3D
 var hand_sprite: Sprite3D
 var weapon: HeldWeapon
 var equipped_weapon: WeaponAppearance = DEFAULT_WEAPON
+var _body_mat: ShaderMaterial
+var _hand_mat: ShaderMaterial
 ## 舊測試與場景讀取用；光源的生命週期與設定由武器管理。
 var staff_light: OmniLight3D:
 	get:
@@ -87,6 +92,10 @@ func _ready() -> void:
 	sprite.offset = Vector2(-BODY_OFFSET_X, FEET.y - FRAME_SIZE.y * 0.5)
 	# 角色放在第 2 層，讓杖光照亮她腳邊的地面。
 	sprite.layers = 2
+	_body_mat = _make_char_material(sprite.texture,
+		load("res://assets/characters/mage_atlas_n.png"),
+		load("res://assets/characters/mage_atlas_m.png"))
+	sprite.material_override = _body_mat
 	add_child(sprite)
 	weapon = HeldWeapon.new()
 	add_child(weapon)
@@ -102,13 +111,18 @@ func _ready() -> void:
 	hand_sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_DISCARD
 	hand_sprite.double_sided = true
 	hand_sprite.layers = 2
+	hand_sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_hand_mat = _make_char_material(hand_sprite.texture,
+		load("res://assets/characters/mage_hand_atlas_n.png"),
+		load("res://assets/characters/mage_hand_atlas_m.png"))
+	hand_sprite.material_override = _hand_mat
 	add_child(hand_sprite)
 	_apply_pitch_compensation()
 
-	# 只照角色的補光（第 2 層）：不管哪個時段，角色都要看得清楚
+	# 只照角色的柔和補光（第 2 層）：降到 0.16，讓 3D 法線受光與輪廓光不被平面洗白。
 	var fill := OmniLight3D.new()
 	fill.light_color = Color("#fff1e0")
-	fill.light_energy = 0.3
+	fill.light_energy = 0.16
 	fill.light_cull_mask = 2
 	fill.omni_range = 4.0
 	fill.omni_attenuation = 0.6
@@ -121,6 +135,17 @@ func _ready() -> void:
 	_refresh_sprite()
 
 
+func _make_char_material(albedo: Texture2D, normal: Texture2D, material_map: Texture2D) -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = CHAR_SHADER
+	mat.set_shader_parameter("albedo_tex", albedo)
+	mat.set_shader_parameter("normal_tex", normal)
+	mat.set_shader_parameter("material_tex", material_map)
+	mat.set_shader_parameter("rim_strength", 0.92)
+	mat.set_shader_parameter("emission_strength", 0.0)
+	return mat
+
+
 func replace_element(slot: int, element: int) -> void:
 	if slot < 0 or slot >= loadout.size() or not Elements.SELECTABLE.has(element) or loadout.has(element):
 		return
@@ -131,11 +156,12 @@ func replace_element(slot: int, element: int) -> void:
 func _physics_process(delta: float) -> void:
 	_t += delta
 	var input := move_input
-	var kb := Vector2(
-		float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
-		float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W)))
-	if kb != Vector2.ZERO:
-		input = kb.normalized()
+	if accept_keyboard:
+		var kb := Vector2(
+			float(Input.is_physical_key_pressed(KEY_D)) - float(Input.is_physical_key_pressed(KEY_A)),
+			float(Input.is_physical_key_pressed(KEY_S)) - float(Input.is_physical_key_pressed(KEY_W)))
+		if kb != Vector2.ZERO:
+			input = kb.normalized()
 	var dir := Vector3(input.x, 0, input.y).rotated(Vector3.UP, camera_yaw)
 	velocity.x = dir.x * SPEED
 	velocity.z = dir.z * SPEED
@@ -194,6 +220,20 @@ func _refresh_sprite() -> void:
 	var pitch := deg_to_rad(camera_pitch_deg)
 	var camera_ray := Vector3(0.0, sin(pitch), cos(pitch)).rotated(Vector3.UP, camera_yaw)
 	hand_sprite.position = camera_ray * LAYER_DEPTH * 2.0
+	var flip_sign := -1.0 if sprite.flip_h else 1.0
+	var bounce_dir := 0.82 if mirrored else -0.82
+	var bounce_energy := 0.0
+	var bounce_col := Color("#ffb969")
+	if equipped_weapon != null and equipped_weapon.light_energy > 0.0:
+		var pulse := maxf(0.0, equipped_weapon.light_energy + sin(_t * 3.0) * equipped_weapon.light_pulse)
+		bounce_energy = clampf(pulse * 0.18, 0.0, 0.24)
+		bounce_col = equipped_weapon.light_color
+	for mat: ShaderMaterial in [_body_mat, _hand_mat]:
+		if mat != null:
+			mat.set_shader_parameter("flip_sign", flip_sign)
+			mat.set_shader_parameter("bounce_dir_x", bounce_dir)
+			mat.set_shader_parameter("bounce_energy", bounce_energy)
+			mat.set_shader_parameter("bounce_color", bounce_col)
 	var grip := GRIP + Vector2(staff_offset) - FEET
 	grip.y = -grip.y
 	weapon.pose(grip, mirrored, PIXEL, _stretch, camera_yaw, camera_ray * LAYER_DEPTH, _t)

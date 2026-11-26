@@ -7,6 +7,8 @@ extends Node3D
 ##   --pos=x,z   指定角色起點（檢查村莊其他角落用）
 ##   --shots=day,night  搭配 --capture，只拍指定時段；檔名加上 --tag=名稱 區分
 ##   --scene=forest  場景：village／forest／snow／dungeon；F5–F8 也能切換
+##   --season=autumn 村莊季節：spring／summer／autumn／winter；G 循環、F9–F12 直切
+##   --weather=rain  天氣：clear／rain；R 切換晴雨
 ##   --altar-preview  搭配 --capture，拍攝靠近土祭壇時的提示
 
 const CAPTURE_WARMUP_FRAMES := 150
@@ -25,6 +27,7 @@ var hud: Node
 var _options: Dictionary
 var _nearby_action := ""
 var _gate_charging := false
+var current_season := "summer"
 
 
 func _ready() -> void:
@@ -35,7 +38,8 @@ func _ready() -> void:
 		return
 
 	var preview_altar: bool = args.has("--capture") and _options.has("altar_preview")
-	var def := Scenes.make("forest" if preview_altar else _options["scene"])
+	current_season = _options["season"]
+	var def := Scenes.make("forest" if preview_altar else _options["scene"], current_season)
 	world = GameWorld.new(def)
 	add_child(world)
 	_batch_world()
@@ -62,6 +66,8 @@ func _ready() -> void:
 		hud.call("setup", player, rig, time_of_day)
 		hud.interaction_requested.connect(interact)
 		hud.element_replacement_requested.connect(_replace_at_altar)
+		hud.season_requested.connect(set_season)
+		hud.weather_toggled.connect(toggle_weather)
 
 	if preview_altar:
 		_place_player(def.element_altars[Elements.Type.EARTH])
@@ -70,11 +76,21 @@ func _ready() -> void:
 		rig.global_position = player.position + rig.look_offset
 	_update_interaction()
 	time_of_day.apply_scene(def)
+	time_of_day.set_weather(_options["weather"], true)
 	time_of_day.set_time(_options["time"], true)
-	DisplayServer.window_set_title("elemental-hd2d-godot — " + def.title)
+	_sync_hud_environment()
+	_update_window_title()
 
 	if args.has("--capture"):
+		_lock_capture_input()
 		_capture_all.call_deferred()
+
+
+func _lock_capture_input() -> void:
+	set_process_unhandled_key_input(false)
+	player.accept_keyboard = false
+	if hud != null:
+		hud.set_process_input(false)
 
 
 func _process(_delta: float) -> void:
@@ -172,7 +188,7 @@ func switch_scene(id: String) -> void:
 	for bolt in get_tree().get_nodes_in_group("spell_previews"):
 		bolt.free()
 	world.free()
-	var def := Scenes.make(id)
+	var def := Scenes.make(id, current_season)
 	world = GameWorld.new(def)
 	add_child(world)
 	_batch_world()
@@ -181,7 +197,55 @@ func switch_scene(id: String) -> void:
 	rig.global_position = player.position + rig.look_offset
 	time_of_day.apply_scene(def)
 	_update_interaction()
-	DisplayServer.window_set_title("elemental-hd2d-godot — " + def.title)
+	_sync_hud_environment()
+	_update_window_title()
+
+
+func set_season(season_name: String) -> void:
+	if not SceneDef.SEASONS.has(season_name) or season_name == current_season:
+		return
+	current_season = season_name
+	if world.def.supports_seasons:
+		var scene_id := world.def.id
+		var saved_pos := player.position
+		var saved_aim := player.aim_dir
+		world.free()
+		var def := Scenes.make(scene_id, current_season)
+		world = GameWorld.new(def)
+		add_child(world)
+		_batch_world()
+		player.position = saved_pos
+		player.aim_dir = saved_aim
+		player.velocity = Vector3.ZERO
+		rig.global_position = player.position + rig.look_offset
+		time_of_day.apply_scene(def)
+		_update_interaction()
+	_sync_hud_environment()
+	_update_window_title()
+
+
+func next_season() -> void:
+	set_season(SceneDef.SEASONS[(SceneDef.SEASONS.find(current_season) + 1) % SceneDef.SEASONS.size()])
+
+
+func toggle_weather() -> void:
+	time_of_day.toggle_weather()
+	_sync_hud_environment()
+	_update_window_title()
+
+
+func _sync_hud_environment() -> void:
+	if hud != null:
+		hud.call("set_environment_state", world.def.supports_seasons, current_season, world.def.outer_ground)
+
+
+func _update_window_title() -> void:
+	var suffix := world.def.title
+	if world.def.supports_seasons:
+		suffix += " · " + SceneDef.SEASON_LABELS[current_season]
+	if world.def.outer_ground and time_of_day.weather == "rain":
+		suffix += " · 雨"
+	DisplayServer.window_set_title("elemental-hd2d-godot — " + suffix)
 
 
 func _batch_world() -> void:
@@ -204,7 +268,13 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		KEY_F6: switch_scene("forest")
 		KEY_F7: switch_scene("snow")
 		KEY_F8: switch_scene("dungeon")
+		KEY_F9: set_season("spring")
+		KEY_F10: set_season("summer")
+		KEY_F11: set_season("autumn")
+		KEY_F12: set_season("winter")
 		KEY_T: time_of_day.next_time()
+		KEY_G: next_season()
+		KEY_R: toggle_weather()
 		KEY_E: interact()
 		KEY_1: _use_element_slot(0)
 		KEY_2: _use_element_slot(1)
@@ -226,7 +296,7 @@ func _on_cast(elements: Array[int], origin: Vector3, direction: Vector3) -> void
 
 
 func _read_options(args: PackedStringArray) -> Dictionary:
-	var options := {"scene": "village", "time": "day", "shots": TimeOfDay.ORDER.duplicate(), "tag": ""}
+	var options := {"scene": "village", "season": "summer", "weather": "clear", "time": "day", "shots": TimeOfDay.ORDER.duplicate(), "tag": ""}
 	var safe_tag := RegEx.new()
 	safe_tag.compile("^[A-Za-z0-9_-]+$")
 	for arg in args:
@@ -246,6 +316,16 @@ func _read_options(args: PackedStringArray) -> Dictionary:
 					push_error("Unknown scene: " + value)
 					return {}
 				options["scene"] = value
+			"--season":
+				if not SceneDef.SEASONS.has(value):
+					push_error("Unknown season: " + value)
+					return {}
+				options["season"] = value
+			"--weather":
+				if not TimeOfDay.WEATHERS.has(value):
+					push_error("Unknown weather: " + value)
+					return {}
+				options["weather"] = value
 			"--time", "--shots":
 				var names := value.split(",") if pair[0] == "--shots" else PackedStringArray([value])
 				for time_name in names:

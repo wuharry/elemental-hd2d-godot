@@ -61,7 +61,7 @@ static func build(def: SceneDef, extra_flower_spots: Array[Vector3]) -> Node3D:
 		flower_xf.append(Transform3D(Basis(Vector3.UP, rng.randf() * TAU), spot))
 		flower_col.append(Color.WHITE)
 		flower_var.append(float(rng.randi() % 4))
-	root.add_child(_multimesh(mesh, "flowers", 4.0, flower_xf, flower_col, flower_var, 0.08))
+	root.add_child(_multimesh(mesh, def.flower_atlas, 4.0, flower_xf, flower_col, flower_var, 0.08))
 	return root
 
 

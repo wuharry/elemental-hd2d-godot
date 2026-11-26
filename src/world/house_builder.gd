@@ -20,6 +20,7 @@ static func build(cfg: Dictionary) -> Node3D:
 	var cols: int = cfg["cols"]
 	var floors: int = cfg["floors"]
 	var shed: bool = cfg.get("shed", false)
+	var snow: bool = cfg.get("snow", false)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = int(cfg["seed"]) * 7919
 
@@ -47,7 +48,7 @@ static func build(cfg: Dictionary) -> Node3D:
 		roof.rotation.y = PI * 0.5
 		ridge_len = d + 0.2
 		span = w + 0.2
-	_roof(roof, ridge_len, span, roof_h, cfg["roof_tint"], wall, trim)
+	_roof(roof, ridge_len, span, roof_h, cfg["roof_tint"], wall, trim, snow)
 
 	if shed:
 		Build.quad(root, Vector2(1.0, 1.5), Vector3(0, 0.8, d * 0.5 + 0.11), Mats.quad("door"))
@@ -60,7 +61,7 @@ static func build(cfg: Dictionary) -> Node3D:
 			var y := base_h + 0.85 + f * 1.6
 			for c in cols:
 				var x := (c - (cols - 1) * 0.5) * (w / cols)
-				_window(root, Vector3(x, y, front_z), 0.0, rng, flower_spots, f == 0)
+				_window(root, Vector3(x, y, front_z), 0.0, rng, flower_spots, f == 0 and not snow)
 				idx += 1
 			# 兩側牆各一扇
 			_window(root, Vector3(side_x, y, 0.0), 90.0, rng, flower_spots, false)
@@ -87,7 +88,7 @@ static func build(cfg: Dictionary) -> Node3D:
 	return root
 
 
-static func _roof(parent: Node3D, ridge_len: float, span: float, roof_h: float, tint: Color, gable_mat: Material, trim: Material) -> void:
+static func _roof(parent: Node3D, ridge_len: float, span: float, roof_h: float, tint: Color, gable_mat: Material, trim: Material, snow: bool = false) -> void:
 	var eave := 0.42
 	var gable_ov := 0.32
 	var thick := 0.14
@@ -95,6 +96,7 @@ static func _roof(parent: Node3D, ridge_len: float, span: float, roof_h: float, 
 	var a := atan2(roof_h, half)
 	var slope_len := sqrt(half * half + roof_h * roof_h) + eave
 	var mat := Mats.tri("roof", tint, 0.85, 1.3)
+	var snow_mat := Mats.tri("snow", Color.WHITE, 0.82, 1.0) if snow else null
 	var dir := Vector3(0, -sin(a), cos(a))
 	var nrm := Vector3(0, cos(a), sin(a))
 	for side in 2:
@@ -105,13 +107,18 @@ static func _roof(parent: Node3D, ridge_len: float, span: float, roof_h: float, 
 		var center := Vector3(0, roof_h, 0) + dir * (slope_len * 0.5 - 0.06) + nrm * (thick * 0.5)
 		var slab := Build.box(pivot, Vector3(ridge_len + gable_ov * 2.0, thick, slope_len), center, mat)
 		slab.rotation.x = a
+		if snow:
+			# 屋坡積雪覆層，讓冬日村莊屋頂呈現厚實的方塊積雪。
+			var cap := Build.box(pivot, Vector3(ridge_len + gable_ov * 2.0 + 0.04, 0.12, slope_len - 0.08),
+				center + nrm * (thick * 0.5 + 0.05), snow_mat)
+			cap.rotation.x = a
 		# 封簷板
 		var fascia := Build.box(pivot, Vector3(ridge_len + gable_ov * 2.0 + 0.04, 0.2, 0.08), Vector3(0, roof_h, 0) + dir * (slope_len - 0.04) + nrm * 0.04, trim)
 		fascia.rotation.x = a
 	# 山牆的三角形
 	Build.prism(parent, Vector3(span, roof_h, ridge_len), Vector3(0, roof_h * 0.5, 0), gable_mat, Vector3(0, 90, 0))
 	# 屋脊蓋板
-	Build.box(parent, Vector3(ridge_len + gable_ov * 2.0 + 0.1, 0.16, 0.34), Vector3(0, roof_h + 0.14, 0), trim)
+	Build.box(parent, Vector3(ridge_len + gable_ov * 2.0 + 0.1, 0.16, 0.34), Vector3(0, roof_h + 0.14, 0), snow_mat if snow else trim)
 
 
 static func _door(root: Node3D, d: float, rng: RandomNumberGenerator) -> void:

@@ -44,12 +44,13 @@ func place(node: Node3D, p: Vector2, yaw_deg: float = 0.0, y: float = 0.0) -> No
 	return node
 
 
-func tree(p: Vector2, s: float, tint: Color, y: float = 0.0) -> Node3D:
+func tree(p: Vector2, s: float, tint: Color, y: float = 0.0, tex_name: String = "leaves", snow: bool = false) -> Node3D:
 	_tree_seed += 1
-	var t := TreeBuilder.broadleaf(_tree_seed, s, tint)
+	var t := TreeBuilder.broadleaf(_tree_seed, s, tint, tex_name, snow)
 	t.position = v3(p, y)
 	add_child(t)
-	leaf_emitters.append(t.position + Vector3(0, 3.6 * s, 0))
+	if not snow:
+		leaf_emitters.append(t.position + Vector3(0, 3.6 * s, 0))
 	return t
 
 
@@ -104,8 +105,15 @@ func _ambient() -> void:
 		add_child(AmbientLife.birds(int(a["birds"]), a.get("bird_height", Vector2(6.5, 9.5)), a.get("bird_tint", Color("#3a3440")), a.get("bird_orbit", 1.0)))
 	if a.get("snow", false):
 		add_child(AmbientLife.snowfall())
+	if a.get("petals", false):
+		add_child(AmbientLife.petals())
+	if def.outer_ground:
+		add_child(AmbientLife.rain())
+		add_child(AmbientLife.rain_splashes())
+	var leaf_ramp: Array = a.get("leaf_ramp", [])
+	var leaf_amount: int = int(a.get("leaf_amount", 14))
 	for p in leaf_emitters:
-		add_child(AmbientLife.leaves(p, 1.8, a.get("leaf_tint", Color.WHITE)))
+		add_child(AmbientLife.leaves(p, 1.8, a.get("leaf_tint", Color.WHITE), leaf_ramp, leaf_amount))
 	for c in chimneys:
 		add_child(AmbientLife.smoke(c))
 	for f in fires:

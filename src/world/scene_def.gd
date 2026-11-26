@@ -5,6 +5,9 @@ extends RefCounted
 ## 這樣新場景自動沿用同一套像素密度、幾何語彙、光影與鏡頭（BLUEPRINT 第 2–4 節）。
 ## 座標：X 向右、Z 朝鏡頭（負 Z 是畫面深處）、單位公尺、可走的地面在 y = 0。
 
+const SEASONS := ["spring", "summer", "autumn", "winter"]
+const SEASON_LABELS := {"spring": "春", "summer": "夏", "autumn": "秋", "winter": "冬"}
+
 const ROOF_BROWN := Color("#6a5146")
 const ROOF_DARK := Color("#54433c")
 const ROOF_SLATE := Color("#56627a")
@@ -13,6 +16,8 @@ const ROOF_SNOW := Color("#e9eef8")
 
 var id := ""
 var title := ""
+var season := "summer"
+var supports_seasons := false
 var world_size := 96.0
 var player_start := Vector3.ZERO
 ## 玩家可站立並觸發互動的位置（XZ，公尺），也供場景擺件與傳送落點共用。
@@ -44,8 +49,10 @@ var ground := {
 var grass_count := 42000
 var flower_count := 7000
 var grass_tints := [Color("#9cc67c"), Color("#dcf0b4"), Color("#f0e69a")]
-## 草叢圖集（assets/textures/ 裡 32x16、兩格的那種）。雪地用 grass_tuft_frost。
+## 草叢圖集（assets/textures/ 裡 32x16、兩格的那種）。秋季用 grass_tuft_autumn、雪地用 grass_tuft_frost。
 var grass_atlas := "grass_tuft"
+## 花朵圖集（assets/textures/ 裡 64x16、四格）。
+var flower_atlas := "flowers"
 ## 外圍背景：terraces（台地 + 針葉林）、walls（室內牆）、none。
 var backdrop := {"kind": "terraces", "cliff_tint": Color("#a8a294"), "top": "grass_ground", "tree_tint_a": Color("#9fc08a"), "tree_tint_b": Color("#6f9a72"), "snow": false}
 ## 核心區以外要不要鋪地（室內場景不鋪，外面就是一片黑）。
@@ -53,6 +60,12 @@ var outer_ground := true
 ## 會動的東西的開關與數量（BLUEPRINT A10：每個場景至少要有四種）。
 var ambient := {"dust": true, "fireflies": true, "clouds": true, "birds": 5, "snow": false}
 ## 場景的光影微調以 id 對應 TimeOfDay.PRESETS.scene_overrides，不在這裡另放數值。
+
+
+## 套用季節設定（支援四季的場景覆寫此函式）。預設保持夏季基準。
+func apply_season(season_name: String) -> void:
+	if SEASONS.has(season_name):
+		season = season_name
 
 
 ## 這個點是不是空洞（河、裂谷、水道、室外）。空洞不鋪地、不能走、不長草。

@@ -4,6 +4,8 @@ extends Resource
 ## 握點不依賴貼圖尺寸，法杖與魔導書都能接到同一隻手。
 
 @export var texture: Texture2D
+@export var normal_texture: Texture2D
+@export var material_texture: Texture2D
 @export var grip_pixel := Vector2.ZERO
 @export var light_pixel := Vector2.ZERO
 @export var light_color := Color("#ffb969")

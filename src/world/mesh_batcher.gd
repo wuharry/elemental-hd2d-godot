@@ -57,7 +57,7 @@ static func _collect_mesh(node: MeshInstance3D, transform: Transform3D, groups: 
 	if source is ShaderMaterial:
 		if kind != "foliage":
 			return
-		material = Mats.batched_foliage()
+		material = Mats.batched_foliage(String(source.get_meta("foliage_tex", "leaves")))
 	elif source is StandardMaterial3D:
 		var standard := source as StandardMaterial3D
 		if standard.transparency != BaseMaterial3D.TRANSPARENCY_DISABLED or standard.billboard_mode != BaseMaterial3D.BILLBOARD_DISABLED or standard.grow:

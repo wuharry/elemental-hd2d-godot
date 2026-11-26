@@ -8,9 +8,14 @@ uniform vec3 deep : source_color = vec3(0.07, 0.19, 0.24);
 uniform vec3 shallow : source_color = vec3(0.16, 0.36, 0.38);
 // 水流方向與速度（公尺／秒，世界 XZ）。池塘是 0，河流才有。
 uniform vec2 flow = vec2(0.0, 0.0);
+global uniform float rain_intensity;
 
 varying vec3 wpos;
 varying float top_face;
+
+float water_hash(vec2 p) {
+	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
 
 void vertex() {
 	wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -26,9 +31,22 @@ void fragment() {
 	vec3 n1 = texture(normal_tex, (p - flow * TIME) * 0.22 + TIME * vec2(0.021, 0.013)).rgb;
 	vec3 n2 = texture(normal_tex, (p - flow * TIME * 1.4) * 0.37 - TIME * vec2(0.014, 0.019)).rgb;
 	vec3 nm = normalize((n1 * 2.0 - 1.0) + (n2 * 2.0 - 1.0)) * 0.5 + 0.5;
+	float rain_glint = 0.0;
+	if (rain_intensity > 0.01) {
+		vec2 r_grid = floor(p * 1.6);
+		vec2 r_local = fract(p * 1.6) - 0.5;
+		float seed = water_hash(r_grid);
+		float cycle = fract(TIME * (1.6 + seed * 0.7) + seed * 23.0);
+		vec2 drop_off = (vec2(water_hash(r_grid + vec2(4.1, 2.3)), water_hash(r_grid + vec2(8.7, 6.1))) - 0.5) * 0.42;
+		float dist = length(r_local - drop_off);
+		float ring = exp(-pow((dist - cycle * 0.36) * 26.0, 2.0)) * (1.0 - cycle) * rain_intensity;
+		vec2 r_dir = normalize(r_local - drop_off + vec2(0.0001));
+		nm = normalize((nm * 2.0 - 1.0) + vec3(r_dir * ring * 0.65, 0.0)) * 0.5 + 0.5;
+		rain_glint = ring;
+	}
 	float ripple = abs(nm.r - 0.5) + abs(nm.g - 0.5);
 	// 固有色只留小幅變化；亮紋由波面法線反射真正的天空、景物和燈光。
-	ALBEDO = mix(deep, shallow, 0.12 + 0.12 * smoothstep(0.02, 0.12, ripple));
+	ALBEDO = mix(deep, shallow, 0.12 + 0.12 * smoothstep(0.02, 0.12, ripple)) + vec3(0.22, 0.28, 0.34) * rain_glint;
 	NORMAL_MAP = nm;
 	NORMAL_MAP_DEPTH = 0.55;
 	ROUGHNESS = 0.08;

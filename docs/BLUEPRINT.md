@@ -23,9 +23,9 @@
 | A4 | 貼圖不畫光影 | 貼圖只放固有色與 `_n` 法線圖；明暗全部交給即時光 | 四個時段共用同一套貼圖，畫死的陰影在夜晚會穿幫 |
 | A5 | 貼圖不手改 | 改 `tools/gen_textures.gd`、`tools/gen_character.gd` 或 `tools/gen_element_icons.gd` 後重跑；PNG 是產物 | 可重現，也能一次調整全套色調 |
 | A6 | 方塊貼圖走 triplanar | `Mats.tri()`（local triplanar），用 `BoxMesh.size` 定尺寸，**不要用 node scale**；合併時由 `Mats.batched_tri()` 與頂點自訂欄位保留原始座標、法線與切線 | scale 會把像素拉長，破壞 A1 |
-| A7 | 光影數值只放一處 | 四個時段的太陽、環境光、霧、窗光、路燈全部在 `src/world/time_of_day.gd` 的 `PRESETS` | 調色時不用滿專案找數字 |
+| A7 | 光影數值只放一處 | 四時段、場景微調、四季與晴雨天氣的太陽、環境光、霧、窗光、路燈全部在 `src/world/time_of_day.gd` 的 `PRESETS` | 調色時不用滿專案找數字 |
 | A8 | 暖冷對比 | 人造光（窗、路燈、營火）一律暖色；陰影與夜晚環境光偏冷 | 兩張參考圖的氛圍都靠這個 |
-| A9 | 角色是 2 頭身像素圖片 | `Sprite3D`、繞 Y 軸面向鏡頭、吃場景光、`alpha_cut`。以腳底為原點，垂直補償鏡頭俯角的 `1/cos(pitch)`，保留原像素寬度 | 維持紙片直立與接地，讓畫面上的頭身比例接近原稿 |
+| A9 | 角色是 2 頭身像素圖片 | `Sprite3D` 搭配 `shaders/pixel_character.gdshader`（Y 軸看板、立體法線圖、即時 3D 輪廓光、alpha cutout 深度寫入），以腳底為原點垂直補償鏡頭俯角 `1/cos(pitch)`，保留原像素寬度 | 維持紙片直立與接地，讓像素角色融入真實 3D 光影 |
 | A11 | Q 版世界比例 | 戴帽 B 主角基準高 1.65 公尺（44 原生像素 × 1.20 ÷ 32），33° 俯角下紙片補償高約 1.97 公尺。門高 1.5 公尺、一層樓 1.6 公尺、窗 0.75 公尺（24 px） | 用正常鏡頭同時看清主角和建築 |
 | A10 | 場景要有會動的東西 | 風吹花草與樹、落葉、蝴蝶、鳥、煙囪煙、塵埃光點、雲影、夜晚螢火蟲 | 驗收條件明寫「生動」 |
 
@@ -85,13 +85,15 @@ godot --headless --path . --script res://tests/element_orbit_test.gd # 佇列狀
 godot --headless --path . --script res://tests/style_test.gd      # 四場景組裝與切換 + 逐場景硬規則（第 2、8 節；不是視覺驗收）
 godot --headless --path . --script res://tests/mesh_batch_test.gd # 合併前後幾何與材質資料
 godot --headless --path . --script res://tests/water_reflection_test.gd # 水底、反射覆蓋及日夜／場景切換
+godot --headless --path . --script res://tests/season_weather_lighting_test.gd # 村莊四季、雨天濕地與角色 3D 光照
 zsh tests/capture_test.sh                                       # 缺圖、舊圖、失敗、逾時必須回報失敗
-tools/capture.sh                                                  # 開視窗拍四個時段到 test_output/（可加 --scene=、--nohud、--pos=x,z、--shots=day,night、--tag=名稱）
+tools/capture.sh                                                  # 開視窗拍四個時段到 test_output/（可加 --scene=、--season=、--weather=、--nohud、--pos=x,z、--shots=day,night、--tag=名稱）
 godot --headless --path . --script res://tools/contact_sheet.gd   # 場景 × 時段總表 test_output/contact_sheet.png（先用 --tag=<場景> 拍齊）
 godot --path .                                                    # 實際遊玩
 ```
 
 - 截圖必須開視窗跑；`--headless` 沒有畫面，不能證明視覺正確。
+- 驗收截圖只留在本機的 `test_output/` 或 `docs/screenshots/`，不新增到 Git；遊戲執行需要的正式貼圖照常提交。既有已追蹤的歷史截圖不在此規則下批量刪除。
 - 每次改場景或光影：跑 `tools/capture.sh`，**親眼看 PNG**，再對照 `docs/reference/`。
 - 測試分兩種，不能互相代替：`tests/` 驗的是「按了會發生對的事」，截圖驗的是「畫面對不對」。
 
@@ -119,7 +121,7 @@ godot --path .                                                    # 實際遊玩
 | S9 | Q 版比例：房屋底層 1.6–1.9 公尺、每層 1.5–1.75 公尺（A11） | 自動 |
 | S10 | 開場畫面的構圖：前景有東西給景深糊掉；中景是玩家加一個地標（營火、橋、祭壇、正門）；背景有台地、樹林或牆擋住地平線 | 看圖 |
 | S11 | 細節密度跟村莊同級：畫面每一區都要有東西，不能有大片空地板或空雪地。地下城第一版只有 595 個節點，看起來就是空的 | 看圖 |
-| S12 | 地面用三層加側面貼圖。草叢依環境換圖集（`grass_tuft`／`grass_tuft_frost`），不要用色調把綠草硬染成別的顏色 | 看圖 |
+| S12 | 地面用三層加側面貼圖。草叢依環境與季節換圖集（`grass_tuft`／`grass_tuft_autumn`／`grass_tuft_frost`），樹冠依季節換葉片貼圖（`leaves`／`leaves_blossom`／`leaves_autumn`／`leaves_winter`），不要用色調把綠草硬染成別的顏色 | 看圖 |
 
 驗收順序：`style_test.gd` 全過 → 拍四個時段 → `tools/contact_sheet.gd` 排成總表 → 跟村莊同一欄比。總表印出的亮度數字只是輔助，數字正常不代表畫面對。
 
